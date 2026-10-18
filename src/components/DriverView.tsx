@@ -312,7 +312,7 @@ export const DriverView: React.FC<DriverViewProps> = ({
               </div>
               <div className="text-[11px] text-slate-400 pt-1 border-t border-slate-750 flex items-center justify-between">
                 <span>दूरी: ~{incomingRide.distanceKm} KM</span>
-                <span className="text-amber-400 font-medium">प्लेटफॉर्म कमीशन: 12% + ₹3</span>
+                <span className="text-emerald-400 font-medium">सीधा नकद भुगतान</span>
               </div>
             </div>
 
@@ -466,28 +466,15 @@ export const DriverView: React.FC<DriverViewProps> = ({
               ग्राहक से पूरा नकद किराया प्राप्त करें:
             </p>
 
-            {/* Fare Breakdown & Silent Commission Display */}
+            {/* Clean Cash Fare Receipt - Commission details hidden from driver */}
             <div className="p-4 rounded-2xl bg-slate-850 border border-slate-750 text-left space-y-2 text-xs">
-              <div className="flex justify-between items-center text-sm font-bold text-white pb-2 border-b border-slate-750">
+              <div className="flex justify-between items-center text-sm font-bold text-white">
                 <span>सवारी से नकद प्राप्त (Cash Fare):</span>
-                <span className="text-emerald-400 font-mono text-base">₹{completedSummary.fare}</span>
+                <span className="text-emerald-400 font-mono text-xl font-black">₹{completedSummary.fare}</span>
               </div>
-              <div className="flex justify-between items-center text-slate-400">
-                <span>प्लेटफॉर्म कमीशन (12%):</span>
-                <span className="font-mono text-rose-400">-₹{(completedSummary.fare * 0.12).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between items-center text-slate-400">
-                <span>निश्चित प्लेटफॉर्म शुल्क (Fixed):</span>
-                <span className="font-mono text-rose-400">-₹3.00</span>
-              </div>
-              <div className="flex justify-between items-center font-bold text-rose-400 pt-1 border-t border-slate-750">
-                <span>वॉलेट से काटी गई कुल राशि:</span>
-                <span className="font-mono">-₹{completedSummary.commission.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between items-center font-bold text-amber-400 pt-1 border-t border-slate-750 text-sm">
-                <span>आपकी शुद्ध कमाई (Net Earnings):</span>
-                <span className="font-mono text-base">₹{completedSummary.net.toFixed(2)}</span>
-              </div>
+              <p className="text-[11px] text-slate-400 pt-1 border-t border-slate-800">
+                सवारी संपन्न हो चुकी है। यह पूरी राशि ग्राहक से नकद प्राप्त करें।
+              </p>
             </div>
 
             <button

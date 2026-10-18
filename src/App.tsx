@@ -158,38 +158,6 @@ export default function App() {
 
   return (
     <div className="w-full h-full min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-x-hidden relative">
-      {/* FLOATING PERMANENT HOME / RESET BUTTON (ALWAYS VISIBLE OVER ALL MAPS & VIEWS) */}
-      {!isAdminView && (
-        <div className="fixed top-3 left-3 z-[99999] flex items-center gap-2 pointer-events-auto">
-          {currentUser && (
-            <button
-              onClick={() => {
-                store.clearActiveRide();
-                store.setCurrentUser(null);
-                setCurrentUser(null);
-              }}
-              className="py-1.5 px-3 rounded-full bg-slate-900/95 text-white border-2 border-amber-500 shadow-2xl flex items-center gap-1.5 text-xs font-black backdrop-blur-md active:scale-95 cursor-pointer hover:bg-slate-800 transition"
-              title="मुख्य पेज पर जाएं (Back to Home)"
-            >
-              <ArrowLeft className="w-4 h-4 text-amber-400 stroke-[3]" />
-              <span>← मुख्य पेज (Home)</span>
-            </button>
-          )}
-
-          <button
-            onClick={() => {
-              store.clearActiveRide();
-              window.location.reload();
-            }}
-            className="py-1.5 px-2.5 rounded-full bg-slate-900/90 text-rose-300 border border-rose-500/40 text-[11px] font-bold shadow-lg backdrop-blur-md hover:bg-slate-800 transition active:scale-95 cursor-pointer flex items-center gap-1"
-            title="राइड रीसेट करें (Clear stuck ride)"
-          >
-            <RefreshCw className="w-3 h-3 text-rose-400" />
-            <span>राइड हटाएं (Reset)</span>
-          </button>
-        </div>
-      )}
-
       {/* 1. SECRET ADMIN DASHBOARD VIEW */}
       {isAdminView ? (
         <AdminSecretDashboard

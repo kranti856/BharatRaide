@@ -211,22 +211,44 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
 
   return (
     <div className="relative w-full h-full flex flex-col overflow-hidden bg-slate-900 select-none">
+      {/* FLOATING TOP BAR: ALWAYS 100% VISIBLE OVER ANY MAP OR STATE */}
+      <div className="fixed top-3 left-3 right-3 z-[999999] flex items-center justify-between pointer-events-auto">
+        {onBackToHome && (
+          <button
+            type="button"
+            onClick={() => {
+              store.clearActiveRide();
+              onBackToHome();
+            }}
+            className="py-1.5 px-3.5 rounded-full bg-slate-900/95 text-white border-2 border-amber-500 shadow-2xl flex items-center gap-1.5 text-xs font-black backdrop-blur-md active:scale-95 cursor-pointer hover:bg-slate-800 transition"
+          >
+            <ArrowLeft className="w-4 h-4 text-amber-400 stroke-[3]" />
+            <span>← मुख्य पेज</span>
+          </button>
+        )}
+
+        {activeRide && (
+          <button
+            type="button"
+            onClick={() => {
+              store.cancelRide();
+              store.clearActiveRide();
+              setActiveRide(null);
+            }}
+            className="py-1.5 px-4 rounded-full bg-rose-600 hover:bg-rose-500 text-white border-2 border-rose-300 text-xs font-black shadow-2xl backdrop-blur-md active:scale-95 cursor-pointer flex items-center gap-1.5 transition"
+          >
+            <X className="w-4 h-4 stroke-[3]" />
+            <span>राइड रद्द करें (Cancel)</span>
+          </button>
+        )}
+      </div>
+
       {/* 1. TOP HEADER & SEARCH / PICKUP-DROP INPUTS */}
-      <div className="absolute top-0 left-0 right-0 z-30 p-3 pt-3 pointer-events-none">
+      <div className="absolute top-12 left-0 right-0 z-30 p-3 pt-1 pointer-events-none">
         <div className="max-w-md mx-auto space-y-2 pointer-events-auto">
           {/* Brand & Mode Strip */}
           <div className="flex items-center justify-between bg-slate-900/90 backdrop-blur-md px-3 py-2 rounded-2xl border border-slate-750 shadow-xl">
             <div className="flex items-center gap-2">
-              {onBackToHome && (
-                <button
-                  onClick={onBackToHome}
-                  className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 transition flex items-center justify-center cursor-pointer"
-                  title="मुख्य पेज पर वापस जाएं (Back to Home)"
-                  aria-label="Back to Home"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                </button>
-              )}
               <img src="/icon.svg" alt="BharatRaide" className="w-7 h-7 rounded-lg shadow-sm" />
               <div>
                 <span className="text-xs font-black tracking-tight text-white">
@@ -370,7 +392,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                   <div>
                     <h4 className="text-sm font-extrabold text-white">BharatRaide Moto</h4>
                     <p className="text-[11px] text-slate-400">
-                      दूरी: ~{km} KM • 12% + ₹3 कम कमीशन
+                      दूरी: ~{km} KM • सबसे तेज व किफायती
                     </p>
                   </div>
                 </div>

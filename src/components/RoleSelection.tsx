@@ -154,7 +154,7 @@ export const RoleSelection: React.FC<RoleSelectionProps> = ({ onRegisterSubmit, 
                   <div>
                     <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">पायलट (चालक)</span>
                     <h3 className="text-xl font-extrabold text-white">Drive</h3>
-                    <p className="text-xs text-slate-400 mt-0.5">अपनी बाइक चलाएं, सीधा कैश कमाएं (12% + ₹3)</p>
+                    <p className="text-xs text-slate-400 mt-0.5">अपनी बाइक चलाएं, सीधा कैश कमाएं</p>
                   </div>
                 </div>
                 <ArrowRight className="w-6 h-6 text-slate-400 group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" />
