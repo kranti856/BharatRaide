@@ -119,8 +119,13 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
     const map = L.map(containerRef.current, {
       center: center,
       zoom: zoom,
-      zoomControl: false,
+      zoomControl: false, // We render custom mobile-first touch buttons
       attributionControl: false,
+      tapHold: true,
+      touchZoom: true,
+      doubleClickZoom: true,
+      minZoom: 11,
+      maxZoom: 18,
     });
 
     // 100% Free OpenStreetMap Tiles (No API Key Required)
@@ -277,14 +282,66 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
 
       routeLayerRef.current = polyline;
 
-      // Fit bounds nicely
+      // Fit bounds nicely without excessive zoom out
       try {
-        mapRef.current.fitBounds(polyline.getBounds(), { padding: [50, 50], maxZoom: 16 });
+        const bounds = polyline.getBounds();
+        mapRef.current.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+        if (mapRef.current.getZoom() < 13) {
+          mapRef.current.setZoom(14);
+        }
       } catch (e) {
         // ignore bounds fit error
       }
     }
   }, [routePoints]);
 
-  return <div ref={containerRef} className={className} style={{ width: '100%', height: '100%', minHeight: '300px' }} />;
+  const handleZoomIn = () => {
+    if (mapRef.current) mapRef.current.zoomIn();
+  };
+
+  const handleZoomOut = () => {
+    if (mapRef.current) mapRef.current.zoomOut();
+  };
+
+  const handleRecenter = () => {
+    if (mapRef.current) {
+      const target = userCoords || center;
+      mapRef.current.setView(target, 15);
+    }
+  };
+
+  return (
+    <div className={`relative ${className}`} style={{ width: '100%', height: '100%' }}>
+      <div ref={containerRef} style={{ width: '100%', height: '100%', minHeight: '300px' }} />
+
+      {/* Mobile Touch Zoom Controls (+ / − / 🎯) */}
+      <div className="absolute right-3 top-36 z-[400] flex flex-col gap-2 pointer-events-auto">
+        <button
+          type="button"
+          onClick={handleZoomIn}
+          className="w-10 h-10 rounded-xl bg-slate-900/95 text-white border border-slate-700 shadow-xl flex items-center justify-center font-bold text-xl active:scale-95 hover:bg-slate-800 cursor-pointer"
+          aria-label="Zoom In"
+        >
+          +
+        </button>
+        <button
+          type="button"
+          onClick={handleZoomOut}
+          className="w-10 h-10 rounded-xl bg-slate-900/95 text-white border border-slate-700 shadow-xl flex items-center justify-center font-bold text-xl active:scale-95 hover:bg-slate-800 cursor-pointer"
+          aria-label="Zoom Out"
+        >
+          −
+        </button>
+        <button
+          type="button"
+          onClick={handleRecenter}
+          className="w-10 h-10 rounded-xl bg-slate-900/95 text-amber-400 border border-slate-700 shadow-xl flex items-center justify-center active:scale-95 hover:bg-slate-800 cursor-pointer text-base font-bold"
+          aria-label="Recenter GPS"
+          title="वर्तमान स्थान"
+        >
+          🎯
+        </button>
+      </div>
+    </div>
+  );
 };

@@ -250,13 +250,17 @@ class AppStore {
     const driver = drivers.find((d) => d.id === driverId);
     if (!ride || !driver) return null;
 
+    // Place driver close to customer pickup (within 400-600 meters)
+    const nearbyLat = ride.pickup.lat + (Math.random() - 0.5) * 0.006;
+    const nearbyLng = ride.pickup.lng + (Math.random() - 0.5) * 0.006;
+
     ride.status = 'accepted';
     ride.driverId = driver.id;
     ride.driverName = driver.name;
     ride.driverPhone = driver.phone;
     ride.driverVehicle = driver.vehicleModel;
     ride.driverVehicleNumber = driver.vehicleNumber;
-    ride.driverCoords = [driver.lat, driver.lng];
+    ride.driverCoords = [nearbyLat, nearbyLng];
     ride.acceptedAt = Date.now();
 
     localStorage.setItem(STORAGE_KEYS.ACTIVE_RIDE, JSON.stringify(ride));
