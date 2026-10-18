@@ -49,8 +49,39 @@
         }
       })();
     </script>
+    <!-- Emergency URL Reset Handler -->
+    <script>
+      (function() {
+        if (window.location.hash.indexOf('reset') !== -1 || window.location.search.indexOf('reset') !== -1) {
+          try {
+            localStorage.clear();
+            sessionStorage.clear();
+            if ('caches' in window) {
+              caches.keys().then(function(keys) {
+                keys.forEach(function(k) { caches.delete(k); });
+              });
+            }
+            if ('serviceWorker' in navigator) {
+              navigator.serviceWorker.getRegistrations().then(function(regs) {
+                regs.forEach(function(reg) { reg.unregister(); });
+              });
+            }
+            window.location.href = window.location.origin + '/';
+          } catch(e) {}
+        }
+      })();
+    </script>
   </head>
   <body class="h-full overflow-hidden select-none touch-manipulation bg-slate-900 font-sans text-slate-100 antialiased">
+    <!-- Floating Emergency Reset Button (Always 100% accessible over everything) -->
+    <button
+      id="emergency-reset-btn"
+      onclick="localStorage.clear(); sessionStorage.clear(); if('caches' in window){caches.keys().then(function(k){k.forEach(function(c){caches.delete(c);});});} if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(sw){sw.unregister();});});} window.location.href='/';"
+      style="position: fixed; top: 12px; right: 12px; z-index: 2147483647; background: #DC2626; color: #FFFFFF; font-weight: 800; font-size: 11px; padding: 6px 14px; border-radius: 9999px; border: 2px solid #FFFFFF; box-shadow: 0 4px 16px rgba(0,0,0,0.8); cursor: pointer; pointer-events: auto; display: flex; align-items: center; gap: 4px;"
+    >
+      ✕ रीसेट (Reset)
+    </button>
+
     <div id="root" class="h-full w-full"></div>
     <script type="module" src="/src/main.tsx"></script>
 
@@ -60,6 +91,7 @@
         window.addEventListener('load', function() {
           navigator.serviceWorker.register('/service-worker.js')
             .then(function(reg) {
+              reg.update();
               console.log('BharatRaide Service Worker active with scope:', reg.scope);
             })
             .catch(function(err) {
