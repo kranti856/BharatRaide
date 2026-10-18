@@ -449,6 +449,45 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
               <div className="text-[11px] text-slate-400 font-medium">
                 OTP डालते ही लाइव ट्रैकिंग व मीटर ऑन होगा
               </div>
+
+              {/* Action Buttons to never get stuck */}
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    store.cancelRide();
+                    store.clearActiveRide();
+                    setActiveRide(null);
+                  }}
+                  className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-750 text-rose-400 font-bold text-xs border border-slate-700 transition"
+                >
+                  राइड रद्द करें (Cancel)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Simulate driver entering OTP
+                    store.verifyOtpAndStartRide(activeRide.startOtp);
+                  }}
+                  className="py-2.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-xs shadow-md transition"
+                >
+                  राइड शुरू करें (Start)
+                </button>
+              </div>
+
+              {onBackToHome && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    store.clearActiveRide();
+                    setActiveRide(null);
+                    onBackToHome();
+                  }}
+                  className="w-full text-[11px] text-slate-400 hover:text-slate-200 underline pt-1"
+                >
+                  ← होम स्क्रीन पर वापस जाएं (Back to Home)
+                </button>
+              )}
             </div>
           ) : activeRide.status === 'in_trip' ? (
             /* SECTION 7: LIVE DROP LOCATION TRACKING & ETA COUNTDOWN */
@@ -477,6 +516,29 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
               <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-semibold text-center flex items-center justify-center gap-1.5">
                 <CheckCircle className="w-4 h-4" />
                 <span>सफर जारी है: {activeRide.drop.name}</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    store.cancelRide();
+                    store.clearActiveRide();
+                    setActiveRide(null);
+                  }}
+                  className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-750 text-rose-400 font-bold text-xs border border-slate-700 transition"
+                >
+                  सफर रद्द करें
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    store.completeRide();
+                  }}
+                  className="py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-md transition"
+                >
+                  सफर समाप्त (End Ride)
+                </button>
               </div>
             </div>
           ) : activeRide.status === 'completed' ? (
