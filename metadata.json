@@ -1,0 +1,6 @@
+{
+  "name": "BharatRaide",
+  "description": "Production-ready Progressive Web App for bike-taxi & mobility with real-time tracking, dual driver/customer interface, Razorpay wallet, and PWA direct-install.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

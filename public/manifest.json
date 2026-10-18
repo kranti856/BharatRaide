@@ -1,0 +1,57 @@
+{
+  "id": "/",
+  "name": "BharatRaide",
+  "short_name": "BharatRaide",
+  "description": "India's instant PWA Bike Taxi & Mobility platform. Direct cash payments, real-time tracking, and instant driver wallet.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#ff9933",
+  "lang": "en-IN",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "categories": [
+    "transportation",
+    "travel",
+    "business"
+  ],
+  "shortcuts": [
+    {
+      "name": "Book BharatRaide",
+      "url": "/?mode=customer",
+      "description": "Book a bike taxi immediately"
+    },
+    {
+      "name": "Driver Duty Mode",
+      "url": "/?mode=driver",
+      "description": "Toggle duty and start earning"
+    }
+  ]
+}
