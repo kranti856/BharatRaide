@@ -11,6 +11,7 @@ import {
   CheckCircle,
   X,
   Compass,
+  ArrowLeft,
 } from 'lucide-react';
 import { CustomerProfile, DriverProfile, RideRequest, LocationPoint } from '../types';
 import { store } from '../services/store';
@@ -21,6 +22,7 @@ interface CustomerViewProps {
   userCoords: [number, number];
   onSwitchRole?: () => void;
   onOpenInstall?: () => void;
+  onBackToHome?: () => void;
 }
 
 // Popular Quick Landmarks for Fast Indian City Booking
@@ -36,6 +38,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
   userCoords,
   onSwitchRole,
   onOpenInstall,
+  onBackToHome,
 }) => {
   const [activeDrivers, setActiveDrivers] = useState<DriverProfile[]>([]);
   const [activeRide, setActiveRide] = useState<RideRequest | null>(null);
@@ -212,15 +215,25 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
       <div className="absolute top-0 left-0 right-0 z-30 p-3 pt-3 pointer-events-none">
         <div className="max-w-md mx-auto space-y-2 pointer-events-auto">
           {/* Brand & Mode Strip */}
-          <div className="flex items-center justify-between bg-slate-900/90 backdrop-blur-md px-3.5 py-2 rounded-2xl border border-slate-750 shadow-xl">
+          <div className="flex items-center justify-between bg-slate-900/90 backdrop-blur-md px-3 py-2 rounded-2xl border border-slate-750 shadow-xl">
             <div className="flex items-center gap-2">
+              {onBackToHome && (
+                <button
+                  onClick={onBackToHome}
+                  className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 transition flex items-center justify-center cursor-pointer"
+                  title="मुख्य पेज पर वापस जाएं (Back to Home)"
+                  aria-label="Back to Home"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+              )}
               <img src="/icon.svg" alt="BharatRaide" className="w-7 h-7 rounded-lg shadow-sm" />
               <div>
                 <span className="text-xs font-black tracking-tight text-white">
                   BHARAT<span className="text-amber-500">RAIDE</span>
                 </span>
                 <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-bold">
-                  Customer View
+                  Customer
                 </span>
               </div>
             </div>

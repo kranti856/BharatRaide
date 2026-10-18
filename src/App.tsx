@@ -139,6 +139,11 @@ export default function App() {
     }
   };
 
+  const handleBackToHome = () => {
+    store.setCurrentUser(null);
+    setCurrentUser(null);
+  };
+
   const currentCoords: [number, number] = [geo.lat, geo.lng];
 
   return (
@@ -167,6 +172,7 @@ export default function App() {
           userCoords={currentCoords}
           onSwitchRole={handleSwitchRole}
           onOpenInstall={() => pwa.setShowInstallModal(true)}
+          onBackToHome={handleBackToHome}
         />
       ) : (
         /* 4. DRIVER DUAL INTERFACE */
@@ -175,6 +181,7 @@ export default function App() {
           driverCoords={currentCoords}
           onSwitchRole={handleSwitchRole}
           onOpenInstall={() => pwa.setShowInstallModal(true)}
+          onBackToHome={handleBackToHome}
         />
       )}
 

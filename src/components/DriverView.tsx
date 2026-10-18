@@ -13,6 +13,7 @@ import {
   MapPin,
   Clock,
   ShieldAlert,
+  ArrowLeft,
 } from 'lucide-react';
 import { DriverProfile, RideRequest } from '../types';
 import { store } from '../services/store';
@@ -24,6 +25,7 @@ interface DriverViewProps {
   driverCoords: [number, number];
   onSwitchRole?: () => void;
   onOpenInstall?: () => void;
+  onBackToHome?: () => void;
 }
 
 export const DriverView: React.FC<DriverViewProps> = ({
@@ -31,6 +33,7 @@ export const DriverView: React.FC<DriverViewProps> = ({
   driverCoords,
   onSwitchRole,
   onOpenInstall,
+  onBackToHome,
 }) => {
   const [driver, setDriver] = useState<DriverProfile>(initialDriver);
   const [activeRide, setActiveRide] = useState<RideRequest | null>(null);
@@ -166,7 +169,17 @@ export const DriverView: React.FC<DriverViewProps> = ({
           {/* Main Top Header Strip */}
           <div className="bg-slate-900/95 backdrop-blur-md px-3.5 py-2.5 rounded-2xl border border-slate-750 shadow-2xl flex items-center justify-between">
             {/* Duty ON/OFF Switch */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              {onBackToHome && (
+                <button
+                  onClick={onBackToHome}
+                  className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 transition flex items-center justify-center cursor-pointer"
+                  title="मुख्य पेज पर वापस जाएं (Back to Home)"
+                  aria-label="Back to Home"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+              )}
               <button
                 onClick={handleToggleDuty}
                 disabled={driver.walletBalance < 0 && !driver.isDutyOn}
