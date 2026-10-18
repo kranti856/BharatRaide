@@ -3,7 +3,7 @@
  * Network-first caching strategy with offline resiliency for permanent PWA installation.
  */
 
-const CACHE_NAME = 'bharatraide-core-v1';
+const CACHE_NAME = 'bharatraide-core-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

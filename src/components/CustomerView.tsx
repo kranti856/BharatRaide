@@ -427,13 +427,24 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                   <Phone className="w-5 h-5" />
                 </a>
               </div>
-              <p className="text-xs text-slate-400 text-center font-medium">
-                ड्राइवर आपके पिकअप स्थान पर पहुँच रहा है...
-              </p>
+
+              {/* Prominent Cancel Ride Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  store.cancelRide();
+                  store.clearActiveRide();
+                  setActiveRide(null);
+                }}
+                className="w-full py-3 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border-2 border-rose-500 text-rose-300 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition active:scale-98"
+              >
+                <X className="w-4 h-4 stroke-[3]" />
+                <span>राइड रद्द करें (Cancel Ride)</span>
+              </button>
             </div>
           ) : activeRide.status === 'arrived' ? (
             /* SECTION 6: RIDE START SECRET 4-DIGIT OTP DISPLAY */
-            <div className="p-4 rounded-3xl bg-gradient-to-br from-slate-850 to-slate-900 border-2 border-amber-500 shadow-2xl text-center space-y-2">
+            <div className="p-4 rounded-3xl bg-gradient-to-br from-slate-850 to-slate-900 border-2 border-amber-500 shadow-2xl text-center space-y-3">
               <span className="text-[11px] font-extrabold text-amber-400 uppercase tracking-widest">
                 ड्राइवर पिकअप पर पहुँच गया है (Arrived)
               </span>
@@ -442,52 +453,34 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
               </p>
 
               {/* The Secret 4-digit OTP box */}
-              <div className="py-2.5 px-6 mx-auto inline-block rounded-2xl bg-amber-500/20 border border-amber-500 text-3xl font-black text-amber-300 tracking-widest font-mono shadow-lg shadow-amber-500/20">
+              <div className="py-2.5 px-6 mx-auto inline-block rounded-2xl bg-amber-500/20 border-2 border-amber-500 text-3xl font-black text-amber-300 tracking-widest font-mono shadow-lg shadow-amber-500/20">
                 {activeRide.startOtp}
               </div>
 
-              <div className="text-[11px] text-slate-400 font-medium">
-                OTP डालते ही लाइव ट्रैकिंग व मीटर ऑन होगा
-              </div>
+              {/* PROMINENT CANCEL RIDE BUTTON (FULL WIDTH RED) */}
+              <button
+                type="button"
+                onClick={() => {
+                  store.cancelRide();
+                  store.clearActiveRide();
+                  setActiveRide(null);
+                }}
+                className="w-full py-3.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-sm shadow-lg shadow-rose-600/30 flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition"
+              >
+                <X className="w-5 h-5 stroke-[3]" />
+                <span>राइड रद्द करें (Cancel Ride)</span>
+              </button>
 
-              {/* Action Buttons to never get stuck */}
-              <div className="grid grid-cols-2 gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    store.cancelRide();
-                    store.clearActiveRide();
-                    setActiveRide(null);
-                  }}
-                  className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-750 text-rose-400 font-bold text-xs border border-slate-700 transition"
-                >
-                  राइड रद्द करें (Cancel)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Simulate driver entering OTP
-                    store.verifyOtpAndStartRide(activeRide.startOtp);
-                  }}
-                  className="py-2.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-xs shadow-md transition"
-                >
-                  राइड शुरू करें (Start)
-                </button>
-              </div>
-
-              {onBackToHome && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    store.clearActiveRide();
-                    setActiveRide(null);
-                    onBackToHome();
-                  }}
-                  className="w-full text-[11px] text-slate-400 hover:text-slate-200 underline pt-1"
-                >
-                  ← होम स्क्रीन पर वापस जाएं (Back to Home)
-                </button>
-              )}
+              {/* Secondary start simulation for testing */}
+              <button
+                type="button"
+                onClick={() => {
+                  store.verifyOtpAndStartRide(activeRide.startOtp);
+                }}
+                className="w-full py-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold text-xs border border-emerald-500/40 transition"
+              >
+                सवारी शुरू करें (Test: Start Ride with OTP)
+              </button>
             </div>
           ) : activeRide.status === 'in_trip' ? (
             /* SECTION 7: LIVE DROP LOCATION TRACKING & ETA COUNTDOWN */
