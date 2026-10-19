@@ -44,6 +44,15 @@ export interface LocationPoint {
   address?: string;
 }
 
+export interface NearbyDriverInfo {
+  driverId: string;
+  driverName: string;
+  vehicleModel: string;
+  vehicleNumber: string;
+  distanceKm: number;
+  phone?: string;
+}
+
 export interface RideRequest {
   id: string;
   customerId: string;
@@ -68,6 +77,9 @@ export interface RideRequest {
   completedAt?: number;
   platformCommission?: number; // (Fare * 0.12) + 3
   driverNetEarning?: number;
+  nearbyDrivers?: NearbyDriverInfo[];
+  declinedDriverIds?: string[];
+  searchRadiusKm?: number;
 }
 
 export interface WalletTransaction {

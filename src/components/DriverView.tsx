@@ -14,9 +14,15 @@ import {
   Clock,
   ShieldAlert,
   ArrowLeft,
+  BellRing,
+  Volume2,
+  VolumeX,
+  Check,
+  X,
 } from 'lucide-react';
 import { DriverProfile, RideRequest } from '../types';
-import { store } from '../services/store';
+import { store, calculateDistanceKm } from '../services/store';
+import { soundService } from '../services/soundService';
 import { LeafletMap } from './LeafletMap';
 import { RazorpayModal } from './RazorpayModal';
 
@@ -39,6 +45,7 @@ export const DriverView: React.FC<DriverViewProps> = ({
   const [activeRide, setActiveRide] = useState<RideRequest | null>(null);
   const [incomingRide, setIncomingRide] = useState<RideRequest | null>(null);
   const [isRazorpayOpen, setIsRazorpayOpen] = useState(false);
+  const [isMuted, setIsMuted] = useState(soundService.getIsMuted());
 
   // OTP Input State for starting ride
   const [otpInput, setOtpInput] = useState('');
@@ -51,7 +58,7 @@ export const DriverView: React.FC<DriverViewProps> = ({
     net: number;
   } | null>(null);
 
-  // Store synchronization
+  // Store synchronization & Loud Notification Ringtone trigger
   useEffect(() => {
     const syncState = () => {
       const drivers = store.getDrivers();
@@ -63,21 +70,50 @@ export const DriverView: React.FC<DriverViewProps> = ({
         if (ride.driverId === current.id) {
           setActiveRide(ride);
           setIncomingRide(null);
-        } else if (ride.status === 'searching' && current.isDutyOn && !current.isRestricted) {
-          setIncomingRide(ride);
+          soundService.stopNotificationRing();
+        } else if (
+          ride.status === 'searching' &&
+          current.isDutyOn &&
+          !current.isRestricted &&
+          !ride.declinedDriverIds?.includes(current.id)
+        ) {
+          // Check proximity to customer pickup: within 2-5 KM or in nearby list
+          const distToPickup = calculateDistanceKm(
+            driverCoords[0],
+            driverCoords[1],
+            ride.pickup.lat,
+            ride.pickup.lng
+          );
+          const isNearby =
+            (ride.nearbyDrivers && ride.nearbyDrivers.some((n) => n.driverId === current.id)) ||
+            distToPickup <= 5.5;
+
+          if (isNearby) {
+            setIncomingRide(ride);
+            // Trigger loud notification sound/ring if not already ringing
+            soundService.startLoudNotificationRing();
+          } else {
+            setIncomingRide(null);
+            soundService.stopNotificationRing();
+          }
         } else {
           setIncomingRide(null);
+          soundService.stopNotificationRing();
         }
       } else {
         setActiveRide(null);
         setIncomingRide(null);
+        soundService.stopNotificationRing();
       }
     };
 
     syncState();
     const unsub = store.subscribe(syncState);
-    return unsub;
-  }, [initialDriver.id]);
+    return () => {
+      unsub();
+      soundService.stopNotificationRing();
+    };
+  }, [initialDriver.id, driverCoords[0], driverCoords[1]]);
 
   // Keep driver position synced to store
   useEffect(() => {
@@ -94,8 +130,9 @@ export const DriverView: React.FC<DriverViewProps> = ({
     }
   };
 
-  // Accept Ride
+  // Accept Ride (स्वीकार करें)
   const handleAcceptRide = () => {
+    soundService.stopNotificationRing();
     if (!incomingRide) return;
     const accepted = store.driverAcceptRide(driver.id);
     if (accepted) {
@@ -104,8 +141,12 @@ export const DriverView: React.FC<DriverViewProps> = ({
     }
   };
 
-  // Reject Incoming Ride
-  const handleRejectRide = () => {
+  // Decline Ride (अस्वीकार करें)
+  const handleDeclineRide = () => {
+    soundService.stopNotificationRing();
+    if (incomingRide) {
+      store.driverDeclineRide(driver.id);
+    }
     setIncomingRide(null);
   };
 
@@ -272,12 +313,23 @@ export const DriverView: React.FC<DriverViewProps> = ({
             </div>
           )}
 
-          {/* Driver Vehicle Pill info */}
-          <div className="flex items-center justify-between px-3 py-1 bg-slate-900/80 backdrop-blur-sm rounded-xl border border-slate-800 text-[11px] text-slate-400">
-            <span>
+          {/* Driver Vehicle Pill info & Test Loud Ring button */}
+          <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 backdrop-blur-sm rounded-xl border border-slate-800 text-[11px] text-slate-400">
+            <span className="truncate mr-2">
               पायलट: <strong className="text-white">{driver.name}</strong> • {driver.vehicleModel}
             </span>
-            <span className="font-mono text-amber-400 font-bold">{driver.vehicleNumber}</span>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="font-mono text-amber-400 font-bold">{driver.vehicleNumber}</span>
+              <button
+                type="button"
+                onClick={() => soundService.playSingleChime(1.0)}
+                className="px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bold flex items-center gap-1 cursor-pointer transition active:scale-95"
+                title="लाउड नोटिफिकेशन घंटी बजाकर चेक करें"
+              >
+                <BellRing className="w-3 h-3 text-amber-400" />
+                <span>टेस्ट रिंग</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -316,51 +368,100 @@ export const DriverView: React.FC<DriverViewProps> = ({
         )}
       </div>
 
-      {/* 3. INCOMING RIDE REQUEST POPUP (REAL-TIME NOTIFICATION) */}
+      {/* 3. INCOMING RIDE REQUEST POPUP (REAL-TIME NOTIFICATION WITH LOUD RING) */}
       {incomingRide && !activeRide && (
         <div className="absolute bottom-4 left-3 right-3 z-40 max-w-md mx-auto animate-in slide-in-from-bottom duration-300">
-          <div className="p-4 rounded-3xl bg-slate-900 border-2 border-amber-500 shadow-2xl space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-xs font-black text-amber-400 uppercase tracking-wider">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
-                नई सवारी उपलब्ध (New Ride Request)
-              </span>
-              <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg">
-                सीधी नकद सवारी
-              </span>
-            </div>
-
-            <div className="p-3 rounded-2xl bg-slate-850 space-y-2 text-xs">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                <span className="font-semibold text-slate-200 truncate">
-                  Pickup: {incomingRide.pickup.name}
+          <div className="p-4 rounded-3xl bg-slate-900/98 border-2 border-amber-500 shadow-[0_0_35px_rgba(245,158,11,0.35)] backdrop-blur-md space-y-3">
+            {/* Header with pulsing alert & sound indicator */}
+            <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
+              <span className="flex items-center gap-2 text-xs font-black text-amber-400 uppercase tracking-wider">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
                 </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-rose-400" />
-                <span className="font-semibold text-slate-200 truncate">
-                  Drop: {incomingRide.drop.name}
-                </span>
-              </div>
-              <div className="text-[11px] text-slate-400 pt-1 border-t border-slate-750 flex items-center justify-between">
-                <span>दूरी: ~{incomingRide.distanceKm} KM</span>
-                <span className="text-emerald-400 font-medium">सीधा नकद भुगतान</span>
-              </div>
-            </div>
+                <BellRing className="w-4 h-4 text-amber-400 animate-bounce" />
+                <span>नई राइड रिक्वेस्ट (New Ride Request)</span>
+              </span>
 
-            <div className="grid grid-cols-2 gap-2 pt-1">
+              {/* Sound Ringing Status / Mute Toggle */}
               <button
-                onClick={handleRejectRide}
-                className="py-3 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-400 text-xs font-bold border border-slate-750"
+                type="button"
+                onClick={() => {
+                  const m = soundService.toggleMute();
+                  setIsMuted(m);
+                }}
+                className={`px-2 py-0.5 rounded-lg text-[10px] font-black flex items-center gap-1 border transition cursor-pointer ${
+                  isMuted
+                    ? 'bg-slate-800 text-slate-400 border-slate-700'
+                    : 'bg-amber-500/20 text-amber-300 border-amber-500/50 animate-pulse'
+                }`}
+                title={isMuted ? 'रिंग अनम्यूट करें' : 'रिंग म्यूट करें'}
               >
-                अस्वीकार (Reject)
+                {isMuted ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3 text-amber-400" />}
+                <span>{isMuted ? 'Muted' : 'Loud Ring'}</span>
+              </button>
+            </div>
+
+            {/* Proximity Distance & Customer Detail */}
+            <div className="p-3.5 rounded-2xl bg-slate-850/90 border border-slate-750 space-y-2.5 text-xs">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">ग्राहक का नाम:</span>
+                  <span className="text-sm font-extrabold text-white">{incomingRide.customerName}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">पिकअप दूरी (Proximity):</span>
+                  <span className="text-xs font-black text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-md font-mono inline-block">
+                    ~{calculateDistanceKm(driverCoords[0], driverCoords[1], incomingRide.pickup.lat, incomingRide.pickup.lng)} KM पास
+                  </span>
+                </div>
+              </div>
+
+              {/* Pickup & Drop Points */}
+              <div className="space-y-1.5 pt-1.5 border-t border-slate-750">
+                <div className="flex items-start gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 mt-1 shrink-0" />
+                  <div className="min-w-0">
+                    <span className="text-[10px] text-slate-400 block font-medium">पिकअप स्थान (Pickup):</span>
+                    <span className="font-bold text-slate-100 truncate block">{incomingRide.pickup.name}</span>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-rose-400 mt-1 shrink-0" />
+                  <div className="min-w-0">
+                    <span className="text-[10px] text-slate-400 block font-medium">ड्रॉप स्थान (Drop):</span>
+                    <span className="font-bold text-slate-100 truncate block">{incomingRide.drop.name}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Fare & Trip Distance */}
+              <div className="text-[11px] text-slate-300 pt-2 border-t border-slate-750 flex items-center justify-between">
+                <span>ट्रिप दूरी: ~{incomingRide.distanceKm} KM</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-emerald-400 font-black text-sm font-mono">₹{incomingRide.fare}</span>
+                  <span className="text-[10px] font-bold text-emerald-300 bg-emerald-500/20 px-1.5 py-0.5 rounded">सीधा नकद</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Accept & Decline Action Buttons */}
+            <div className="grid grid-cols-2 gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={handleDeclineRide}
+                className="py-3.5 px-3 rounded-2xl bg-slate-800 hover:bg-rose-950/60 text-slate-300 hover:text-rose-200 text-xs font-black border-2 border-slate-700 hover:border-rose-500/60 shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition"
+              >
+                <X className="w-4 h-4 text-rose-400 stroke-[3]" />
+                <span>Decline (अस्वीकार करें)</span>
               </button>
               <button
+                type="button"
                 onClick={handleAcceptRide}
-                className="py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 text-xs font-black shadow-lg shadow-emerald-500/20 active:scale-98"
+                className="py-3.5 px-3 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-slate-950 text-xs font-black shadow-xl shadow-emerald-500/30 flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition"
               >
-                स्वीकार करें (Accept)
+                <Check className="w-4 h-4 stroke-[3]" />
+                <span>Accept (स्वीकार करें)</span>
               </button>
             </div>
           </div>

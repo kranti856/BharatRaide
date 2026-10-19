@@ -16,6 +16,10 @@ import {
   Crosshair,
   Loader2,
   Sparkles,
+  BellRing,
+  Radio,
+  Users,
+  Check,
 } from 'lucide-react';
 import { CustomerProfile, DriverProfile, RideRequest, LocationPoint } from '../types';
 import { store } from '../services/store';
@@ -318,17 +322,19 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
     });
     setActiveRide(newRide);
 
-    // If no driver accepts in 3.5 seconds in simulator, auto-assign first available mock driver for preview demo
-    setTimeout(() => {
+    // Realistic fallback timer (30s) if test user does not open driver app or tap accept
+    const autoFallbackTimer = setTimeout(() => {
       const current = store.getActiveRide();
-      if (current && current.status === 'searching') {
-        const drivers = store.getDrivers().filter((d) => d.isDutyOn && !d.isRestricted);
+      if (current && current.status === 'searching' && current.customerId === user.id) {
+        const drivers = store.getDrivers().filter((d) => d.isDutyOn && !d.isRestricted && !current.declinedDriverIds?.includes(d.id));
         if (drivers.length > 0) {
           const autoDriver = drivers[0];
           store.driverAcceptRide(autoDriver.id);
         }
       }
-    }, 3500);
+    }, 30000);
+
+    return () => clearTimeout(autoFallbackTimer);
   };
 
   // Automated Movement Simulation when In-Trip or Arrived
@@ -791,18 +797,122 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
               </button>
             </div>
           ) : activeRide.status === 'searching' ? (
-            /* SEARCHING DRIVER STATE */
-            <div className="text-center py-3 space-y-3">
-              <div className="inline-flex p-3 rounded-full bg-amber-500/10 text-amber-400 animate-bounce">
-                <Bike className="w-8 h-8" />
+            /* SEARCHING DRIVER STATE: 2-5 KM PROXIMITY RADAR & LOUD NOTIFICATION DISPATCH */
+            <div className="py-2 space-y-3.5">
+              <div className="text-center space-y-1">
+                <div className="relative inline-flex items-center justify-center">
+                  <span className="animate-ping absolute inline-flex h-12 w-12 rounded-full bg-amber-400/30"></span>
+                  <div className="relative p-3 rounded-full bg-gradient-to-tr from-amber-500/20 to-orange-500/20 border border-amber-500/40 text-amber-400">
+                    <Bike className="w-6 h-6 animate-pulse" />
+                  </div>
+                </div>
+
+                <h4 className="text-sm font-extrabold text-white flex items-center justify-center gap-1.5 pt-1">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                  <span>2-5 KM के दायरे में नज़दीकी राइडर्स ढूंढे जा रहे हैं...</span>
+                </h4>
+
+                {/* Ringing Sound Dispatch Badge */}
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-bold">
+                  <BellRing className="w-3.5 h-3.5 animate-bounce text-amber-400" />
+                  <span>नज़दीकी राइडर्स के फ़ोन पर लाउड रिंग बज रही है</span>
+                </div>
               </div>
-              <h4 className="text-base font-bold text-white">नजदीकी ड्राइवर खोज रहे हैं...</h4>
-              <p className="text-xs text-slate-400">2-3 KM दायरे में मौजूद राइडर्स को रिक्वेस्ट भेजी जा रही है</p>
+
+              {/* Nearby Drivers Found List */}
+              {activeRide.nearbyDrivers && activeRide.nearbyDrivers.length > 0 && (
+                <div className="p-3 rounded-2xl bg-slate-850/90 border border-slate-750 space-y-2">
+                  <div className="flex items-center justify-between text-[11px] font-extrabold text-slate-300 pb-1 border-b border-slate-750">
+                    <span className="flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-amber-400" />
+                      <span>दायरे में पाए गए राइडर्स ({activeRide.nearbyDrivers.length})</span>
+                    </span>
+                    <span className="text-amber-400 font-mono text-[10px]">2-5 KM दायरा</span>
+                  </div>
+
+                  <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                    {activeRide.nearbyDrivers.map((nd) => {
+                      const isDeclined = activeRide.declinedDriverIds?.includes(nd.driverId);
+                      return (
+                        <div
+                          key={nd.driverId}
+                          className="flex items-center justify-between p-2 rounded-xl bg-slate-800/80 text-xs border border-slate-700/60"
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center font-bold text-[10px]">
+                              🏍️
+                            </div>
+                            <div>
+                              <span className="font-bold text-white block">{nd.driverName}</span>
+                              <span className="text-[10px] text-slate-400 font-mono">{nd.vehicleModel}</span>
+                            </div>
+                          </div>
+
+                          <div className="text-right">
+                            <span className="font-mono text-amber-300 text-[11px] font-black block">
+                              ~{nd.distanceKm} KM
+                            </span>
+                            {isDeclined ? (
+                              <span className="text-[10px] text-rose-400 font-bold">अस्वीकार किया</span>
+                            ) : (
+                              <span className="text-[10px] text-emerald-400 font-bold flex items-center justify-end gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                <span>घंटी बज रही है</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons for User / Tester */}
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                {onSwitchRole ? (
+                  <button
+                    type="button"
+                    onClick={onSwitchRole}
+                    className="py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 text-slate-950 font-black text-xs shadow-md shadow-orange-500/20 flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition"
+                    title="ड्राइवर स्क्रीन पर जाकर लाउड रिंग सुनें और Accept/Decline करें"
+                  >
+                    <BellRing className="w-3.5 h-3.5" />
+                    <span>ड्राइवर ऐप खोलें (Accept/Decline)</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const drivers = store.getDrivers().filter((d) => d.isDutyOn && !d.isRestricted);
+                      if (drivers.length > 0) store.driverAcceptRide(drivers[0].id);
+                    }}
+                    className="py-2.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-xs shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                    <span>डेमो: राइड स्वीकारें</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => store.cancelRide()}
+                  className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-rose-950/40 text-slate-300 hover:text-rose-300 text-xs font-bold border border-slate-700 hover:border-rose-500/40 cursor-pointer active:scale-95 transition"
+                >
+                  सवारी रद्द करें (Cancel)
+                </button>
+              </div>
+
+              {/* Simulation Quick Accept shortcut in case tester stays on customer view */}
               <button
-                onClick={() => store.cancelRide()}
-                className="py-2 px-4 rounded-xl bg-slate-800 text-xs font-semibold text-rose-400 border border-slate-700 cursor-pointer"
+                type="button"
+                onClick={() => {
+                  const drivers = store.getDrivers().filter((d) => d.isDutyOn && !d.isRestricted);
+                  if (drivers.length > 0) store.driverAcceptRide(drivers[0].id);
+                }}
+                className="w-full text-center text-[11px] text-slate-400 hover:text-amber-300 transition underline cursor-pointer"
               >
-                राइड रद्द करें (Cancel)
+                डेमो: सीधे ड्राइवर की तरफ से राइड स्वीकार करें (Quick Accept)
               </button>
             </div>
           ) : activeRide.status === 'accepted' ? (
