@@ -12,10 +12,15 @@ import {
   X,
   Compass,
   ArrowLeft,
+  Search,
+  Crosshair,
+  Loader2,
+  Sparkles,
 } from 'lucide-react';
 import { CustomerProfile, DriverProfile, RideRequest, LocationPoint } from '../types';
 import { store } from '../services/store';
 import { LeafletMap } from './LeafletMap';
+import { searchPlaces, reverseGeocode, SearchResultItem } from '../services/locationSearch';
 
 interface CustomerViewProps {
   user: CustomerProfile;
@@ -27,10 +32,12 @@ interface CustomerViewProps {
 
 // Popular Quick Landmarks for Fast Indian City Booking
 const PRESET_PLACES = [
-  { name: 'Metro Station Gate 2', latOffset: 0.012, lngOffset: 0.009 },
-  { name: 'Central Railway Station', latOffset: -0.018, lngOffset: 0.015 },
-  { name: 'Sector 18 Market', latOffset: 0.008, lngOffset: -0.012 },
-  { name: 'District Hospital / Mall', latOffset: -0.011, lngOffset: -0.008 },
+  { name: 'रेलवे स्टेशन (Railway Station)', latOffset: -0.018, lngOffset: 0.015 },
+  { name: 'बस टर्मिनल (ISBT Bus Stand)', latOffset: 0.019, lngOffset: -0.011 },
+  { name: 'मुख्य बाज़ार (Main Market)', latOffset: 0.008, lngOffset: -0.012 },
+  { name: 'मेट्रो स्टेशन (Metro Station)', latOffset: 0.012, lngOffset: 0.009 },
+  { name: 'हवाई अड्डा (Airport T3)', latOffset: -0.035, lngOffset: -0.025 },
+  { name: 'एम्स अस्पताल (Hospital / Mall)', latOffset: -0.011, lngOffset: -0.008 },
 ];
 
 export const CustomerView: React.FC<CustomerViewProps> = ({
@@ -43,20 +50,49 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
   const [activeDrivers, setActiveDrivers] = useState<DriverProfile[]>([]);
   const [activeRide, setActiveRide] = useState<RideRequest | null>(null);
 
-  // Input states
+  // Input text & coordinate states
   const [pickupText, setPickupText] = useState('मेरी वर्तमान लोकेशन (Current GPS)');
   const [dropText, setDropText] = useState('');
   const [pickupCoords, setPickupCoords] = useState<LocationPoint>({
-    name: 'Current Location',
+    name: 'मेरी वर्तमान लोकेशन',
     lat: userCoords[0],
     lng: userCoords[1],
   });
   const [dropCoords, setDropCoords] = useState<LocationPoint | null>(null);
 
+  // Search Autocomplete state
+  const [pickupSuggestions, setPickupSuggestions] = useState<SearchResultItem[]>([]);
+  const [dropSuggestions, setDropSuggestions] = useState<SearchResultItem[]>([]);
+  const [isSearchingPickup, setIsSearchingPickup] = useState(false);
+  const [isSearchingDrop, setIsSearchingDrop] = useState(false);
+  const [activeDropdown, setActiveDropdown] = useState<'pickup' | 'drop' | null>(null);
+
+  // Pin-on-Map Selection Mode ('pickup' | 'drop' | null)
+  const [pinMode, setPinMode] = useState<'pickup' | 'drop' | null>(null);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+
   // ETA Countdown state
   const [etaSeconds, setEtaSeconds] = useState<number>(360); // 6 mins default
   const [driverSimCoords, setDriverSimCoords] = useState<[number, number] | null>(null);
   const [routePolyline, setRoutePolyline] = useState<[number, number][] | null>(null);
+
+  // Reference container for detecting click outside autocomplete dropdowns
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  // Dismiss dropdown when tapping outside
+  useEffect(() => {
+    const handleClickOutside = (e: Event) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setActiveDropdown(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
 
   // Sync with store
   useEffect(() => {
@@ -80,18 +116,98 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
     return unsubscribe;
   }, [user.id]);
 
-  // Update pickup when user GPS moves if not booked
+  // Update pickup when user GPS moves if not booked and using default current location
   useEffect(() => {
-    if (!activeRide) {
+    if (!activeRide && pickupText.includes('वर्तमान')) {
       setPickupCoords({
-        name: 'My GPS Location',
+        name: 'मेरी वर्तमान लोकेशन',
         lat: userCoords[0],
         lng: userCoords[1],
       });
     }
   }, [userCoords[0], userCoords[1], activeRide]);
 
-  // Handle Drop Location Selection
+  // Debounced Autocomplete Search for Pickup Input
+  useEffect(() => {
+    if (!pickupText || activeDropdown !== 'pickup' || pickupText.includes('वर्तमान')) {
+      setPickupSuggestions([]);
+      setIsSearchingPickup(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setIsSearchingPickup(true);
+      try {
+        const results = await searchPlaces(pickupText, userCoords[0], userCoords[1], controller.signal);
+        setPickupSuggestions(results);
+      } catch (err: any) {
+        if (err.name !== 'AbortError') console.warn(err);
+      } finally {
+        setIsSearchingPickup(false);
+      }
+    }, 320);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [pickupText, activeDropdown, userCoords[0], userCoords[1]]);
+
+  // Debounced Autocomplete Search for Drop Input
+  useEffect(() => {
+    if (!dropText || activeDropdown !== 'drop') {
+      setDropSuggestions([]);
+      setIsSearchingDrop(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setIsSearchingDrop(true);
+      try {
+        const results = await searchPlaces(dropText, userCoords[0], userCoords[1], controller.signal);
+        setDropSuggestions(results);
+      } catch (err: any) {
+        if (err.name !== 'AbortError') console.warn(err);
+      } finally {
+        setIsSearchingDrop(false);
+      }
+    }, 320);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [dropText, activeDropdown, userCoords[0], userCoords[1]]);
+
+  // Select Search Item for Pickup
+  const handleSelectPickupItem = (item: SearchResultItem) => {
+    const loc: LocationPoint = {
+      name: item.name,
+      lat: item.lat,
+      lng: item.lng,
+    };
+    setPickupCoords(loc);
+    setPickupText(item.name + (item.locality ? ` (${item.locality})` : ''));
+    setPickupSuggestions([]);
+    setActiveDropdown(null);
+  };
+
+  // Select Search Item for Drop
+  const handleSelectDropItem = (item: SearchResultItem) => {
+    const loc: LocationPoint = {
+      name: item.name,
+      lat: item.lat,
+      lng: item.lng,
+    };
+    setDropCoords(loc);
+    setDropText(item.name + (item.locality ? ` (${item.locality})` : ''));
+    setDropSuggestions([]);
+    setActiveDropdown(null);
+  };
+
+  // Handle Drop Location Selection via Presets
   const selectPresetDrop = (place: (typeof PRESET_PLACES)[0]) => {
     const drop: LocationPoint = {
       name: place.name,
@@ -100,18 +216,50 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
     };
     setDropCoords(drop);
     setDropText(place.name);
+    setActiveDropdown(null);
+    setPinMode(null);
   };
 
-  // Map Click to choose Drop Location
-  const handleMapClick = (lat: number, lng: number) => {
+  // Map Click to choose Pickup or Drop Location
+  const handleMapClick = async (lat: number, lng: number) => {
     if (activeRide) return;
-    const drop: LocationPoint = {
-      name: 'मैप पर चुना गया स्थान',
-      lat,
-      lng,
-    };
-    setDropCoords(drop);
-    setDropText('मैप पर चुना गया स्थान');
+
+    setIsGeocoding(true);
+    const target = pinMode || 'drop'; // default to drop if tapped directly on map without pin mode
+    try {
+      const addressName = await reverseGeocode(lat, lng);
+      if (target === 'pickup') {
+        const pt: LocationPoint = {
+          name: addressName,
+          lat,
+          lng,
+        };
+        setPickupCoords(pt);
+        setPickupText(addressName);
+        setActiveDropdown(null);
+      } else {
+        const pt: LocationPoint = {
+          name: addressName,
+          lat,
+          lng,
+        };
+        setDropCoords(pt);
+        setDropText(addressName);
+        setActiveDropdown(null);
+      }
+    } catch {
+      const fallbackName = `चुना गया स्थान (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+      if (target === 'pickup') {
+        setPickupCoords({ name: fallbackName, lat, lng });
+        setPickupText(fallbackName);
+      } else {
+        setDropCoords({ name: fallbackName, lat, lng });
+        setDropText(fallbackName);
+      }
+    } finally {
+      setIsGeocoding(false);
+      setPinMode(null);
+    }
   };
 
   // Automatically sync preview route line between pickup and drop
@@ -128,7 +276,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
     }
   }, [pickupCoords.lat, pickupCoords.lng, dropCoords?.lat, dropCoords?.lng, activeRide]);
 
-  // Calculate Distance & Fare (Standard Bike Taxi fare: ₹20 base + ₹9/km)
+  // Calculate Distance & Fare (Standard Bike Taxi fare: ₹20 base + ₹9.5/km)
   const calculateFareEstimate = () => {
     if (!dropCoords) return { km: 3.2, fare: 48 };
     const latDiff = Math.abs(pickupCoords.lat - dropCoords.lat);
@@ -143,8 +291,15 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
   const handleBookRide = () => {
     if (!dropCoords) {
       // Default to nearby landmark if empty
-      selectPresetDrop(PRESET_PLACES[0]);
+      const defaultDrop: LocationPoint = {
+        name: PRESET_PLACES[0].name,
+        lat: userCoords[0] + PRESET_PLACES[0].latOffset,
+        lng: userCoords[1] + PRESET_PLACES[0].lngOffset,
+      };
+      setDropCoords(defaultDrop);
+      setDropText(defaultDrop.name);
     }
+
     const { km, fare } = calculateFareEstimate();
     const finalDrop = dropCoords || {
       name: PRESET_PLACES[0].name,
@@ -163,7 +318,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
     });
     setActiveRide(newRide);
 
-    // If no driver accepts in 4 seconds in simulator, auto-assign first available mock driver for preview demo
+    // If no driver accepts in 3.5 seconds in simulator, auto-assign first available mock driver for preview demo
     setTimeout(() => {
       const current = store.getActiveRide();
       if (current && current.status === 'searching') {
@@ -261,7 +416,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
               store.clearActiveRide();
               setActiveRide(null);
             }}
-            className="py-1.5 px-4 rounded-full bg-rose-600 hover:bg-rose-500 text-white border-2 border-rose-300 text-xs font-black shadow-2xl backdrop-blur-md active:scale-95 cursor-pointer flex items-center gap-1.5 transition"
+            className="py-1.5 px-4 rounded-full bg-rose-600 hover:bg-rose-500 text-white border-2 border-rose-300 text-xs font-black shadow-2xl backdrop-blur-md active:scale-95 cursor-pointer flex items-center gap-1.5 transition ml-auto"
           >
             <X className="w-4 h-4 stroke-[3]" />
             <span>राइड रद्द करें (Cancel)</span>
@@ -269,9 +424,9 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
         )}
       </div>
 
-      {/* 1. TOP HEADER & SEARCH / PICKUP-DROP INPUTS */}
+      {/* 1. TOP HEADER & SEARCH BARS (PICKUP & DROP INPUTS WITH AUTOCOMPLETE) */}
       <div className="absolute top-12 left-0 right-0 z-30 p-3 pt-1 pointer-events-none">
-        <div className="max-w-md mx-auto space-y-2 pointer-events-auto">
+        <div ref={searchContainerRef} className="max-w-md mx-auto space-y-2 pointer-events-auto">
           {/* Brand & Mode Strip */}
           <div className="flex items-center justify-between bg-slate-900/90 backdrop-blur-md px-3 py-2 rounded-2xl border border-slate-750 shadow-xl">
             <div className="flex items-center gap-2">
@@ -289,7 +444,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
             <div className="flex items-center gap-1.5">
               <button
                 onClick={onSwitchRole}
-                className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold border border-slate-700 transition"
+                className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 text-[11px] font-semibold border border-slate-700 transition"
               >
                 Switch Role
               </button>
@@ -302,83 +457,232 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
             </div>
           </div>
 
-          {/* Pickup Point & Drop Point Fields (Top section as requested) */}
+          {/* Interactive Search Bars: Pickup Point & Drop Location */}
           {!activeRide && (
-            <div className="bg-slate-900/95 backdrop-blur-md p-3.5 rounded-2xl border border-slate-750 shadow-2xl space-y-2.5">
-              {/* Pickup Field */}
-              <div className="relative flex items-center">
-                <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mr-2.5">
-                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+            <div className="bg-slate-900/95 backdrop-blur-md p-3.5 rounded-2xl border border-slate-750 shadow-2xl space-y-2.5 relative">
+              {/* Pickup Point Search Bar */}
+              <div className="relative">
+                <div className="flex items-center bg-slate-800/80 rounded-xl px-2.5 py-2 border border-slate-700/80 focus-within:border-emerald-500 transition">
+                  <div className="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mr-2">
+                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                  </div>
+                  
+                  <div className="flex-1 min-w-0 pr-1">
+                    <span className="block text-[10px] font-bold text-emerald-400 uppercase tracking-wider leading-none mb-1">
+                      पिकअप पॉइंट (कहाँ से)
+                    </span>
+                    <input
+                      type="text"
+                      value={pickupText}
+                      onFocus={() => {
+                        setActiveDropdown('pickup');
+                        setPinMode(null);
+                      }}
+                      onChange={(e) => {
+                        setPickupText(e.target.value);
+                        setActiveDropdown('pickup');
+                      }}
+                      placeholder="पिकअप स्थान खोजें या टाइप करें..."
+                      className="w-full bg-transparent text-xs font-semibold text-white placeholder-slate-400 outline-none truncate"
+                    />
+                  </div>
+
+                  {/* Right Action Icons for Pickup */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {isSearchingPickup && (
+                      <Loader2 className="w-3.5 h-3.5 text-emerald-400 animate-spin" />
+                    )}
+
+                    {pickupText && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPickupText('');
+                          setActiveDropdown('pickup');
+                        }}
+                        className="p-1 text-slate-400 hover:text-white rounded-md hover:bg-slate-700/60 transition cursor-pointer"
+                        title="हटाएं (Clear)"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+
+                    {/* Quick GPS Location Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPickupCoords({
+                          name: 'मेरी वर्तमान लोकेशन',
+                          lat: userCoords[0],
+                          lng: userCoords[1],
+                        });
+                        setPickupText('मेरी वर्तमान लोकेशन (Current GPS)');
+                        setActiveDropdown(null);
+                        setPinMode(null);
+                      }}
+                      className="p-1.5 text-slate-300 hover:text-emerald-400 rounded-lg hover:bg-slate-700/80 transition cursor-pointer flex items-center gap-1 text-[11px] font-bold"
+                      title="वर्तमान GPS लोकेशन चुनें"
+                    >
+                      <Navigation className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="text-[10px] text-emerald-400 hidden sm:inline">GPS</span>
+                    </button>
+
+                    {/* Pick Pickup on Map Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPinMode(pinMode === 'pickup' ? null : 'pickup');
+                        setActiveDropdown(null);
+                      }}
+                      className={`p-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 transition cursor-pointer ${
+                        pinMode === 'pickup'
+                          ? 'bg-emerald-500 text-slate-950 shadow-md'
+                          : 'text-slate-300 hover:text-white bg-slate-700/60 hover:bg-slate-700'
+                      }`}
+                      title="मैप पर पिन रखकर पिकअप चुनें"
+                    >
+                      <Crosshair className="w-3.5 h-3.5" />
+                      <span className="text-[10px]">मैप</span>
+                    </button>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <span className="block text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
-                    पिकअप लोकेशन (Pickup Point)
-                  </span>
-                  <input
-                    type="text"
-                    value={pickupText}
-                    onChange={(e) => setPickupText(e.target.value)}
-                    placeholder="Enter pickup point"
-                    className="w-full bg-transparent text-xs font-semibold text-white placeholder-slate-400 outline-none"
-                  />
-                </div>
-                <button
-                  onClick={() => {
-                    setPickupCoords({
-                      name: 'Current Location',
-                      lat: userCoords[0],
-                      lng: userCoords[1],
-                    });
-                    setPickupText('मेरी वर्तमान लोकेशन (Current GPS)');
-                  }}
-                  className="p-1.5 text-slate-400 hover:text-emerald-400 rounded-lg hover:bg-slate-800"
-                  title="Current GPS"
-                >
-                  <Navigation className="w-4 h-4" />
-                </button>
+
+                {/* Pickup Autocomplete Suggestions Dropdown */}
+                {activeDropdown === 'pickup' && (pickupSuggestions.length > 0 || isSearchingPickup) && (
+                  <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-slate-850/98 backdrop-blur-xl border border-slate-700 rounded-2xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto animate-in fade-in slide-in-from-top-1">
+                    {isSearchingPickup && pickupSuggestions.length === 0 && (
+                      <div className="p-3 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                        <span>स्थान खोज रहे हैं...</span>
+                      </div>
+                    )}
+                    {pickupSuggestions.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handleSelectPickupItem(item)}
+                        className="w-full px-3 py-2.5 text-left hover:bg-slate-750 border-b border-slate-800 last:border-b-0 flex items-start gap-2.5 transition cursor-pointer"
+                      >
+                        <div className="w-6 h-6 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                          <MapPin className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="block text-xs font-bold text-white truncate">
+                            {item.name}
+                          </span>
+                          <span className="block text-[11px] text-slate-400 truncate">
+                            {item.locality}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              <div className="h-px bg-slate-800 ml-9 mr-2" />
+              {/* Drop Point Search Bar */}
+              <div className="relative">
+                <div className="flex items-center bg-slate-800/80 rounded-xl px-2.5 py-2 border border-slate-700/80 focus-within:border-rose-500 transition">
+                  <div className="w-6 h-6 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 mr-2">
+                    <MapPin className="w-3.5 h-3.5 text-rose-400" />
+                  </div>
+                  
+                  <div className="flex-1 min-w-0 pr-1">
+                    <span className="block text-[10px] font-bold text-rose-400 uppercase tracking-wider leading-none mb-1">
+                      ड्रॉप लोकेशन (कहाँ जाना है)
+                    </span>
+                    <input
+                      type="text"
+                      value={dropText}
+                      onFocus={() => {
+                        setActiveDropdown('drop');
+                        setPinMode(null);
+                      }}
+                      onChange={(e) => {
+                        setDropText(e.target.value);
+                        setActiveDropdown('drop');
+                      }}
+                      placeholder="कहाँ जाना है? (स्थान खोजें या टाइप करें...)"
+                      className="w-full bg-transparent text-xs font-semibold text-white placeholder-slate-400 outline-none truncate"
+                    />
+                  </div>
 
-              {/* Drop Field */}
-              <div className="relative flex items-center">
-                <div className="w-7 h-7 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 mr-2.5">
-                  <MapPin className="w-4 h-4 text-rose-400" />
+                  {/* Right Action Icons for Drop */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {isSearchingDrop && (
+                      <Loader2 className="w-3.5 h-3.5 text-rose-400 animate-spin" />
+                    )}
+
+                    {dropText && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDropCoords(null);
+                          setDropText('');
+                          setActiveDropdown('drop');
+                        }}
+                        className="p-1 text-slate-400 hover:text-white rounded-md hover:bg-slate-700/60 transition cursor-pointer"
+                        title="हटाएं (Clear)"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+
+                    {/* Pick Drop on Map Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPinMode(pinMode === 'drop' ? null : 'drop');
+                        setActiveDropdown(null);
+                      }}
+                      className={`p-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 transition cursor-pointer ${
+                        pinMode === 'drop'
+                          ? 'bg-rose-500 text-white shadow-md'
+                          : 'text-slate-300 hover:text-white bg-slate-700/60 hover:bg-slate-700'
+                      }`}
+                      title="मैप पर पिन रखकर ड्रॉप चुनें"
+                    >
+                      <Crosshair className="w-3.5 h-3.5" />
+                      <span className="text-[10px]">मैप</span>
+                    </button>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <span className="block text-[10px] font-bold text-rose-400 uppercase tracking-wider">
-                    ड्रॉप लोकेशन (Drop Point)
-                  </span>
-                  <input
-                    type="text"
-                    value={dropText}
-                    onChange={(e) => {
-                      setDropText(e.target.value);
-                      if (!dropCoords) {
-                        selectPresetDrop(PRESET_PLACES[0]);
-                      }
-                    }}
-                    placeholder="कहाँ जाना है? (मैप पर क्लिक करें या चुनें)"
-                    className="w-full bg-transparent text-xs font-semibold text-white placeholder-slate-400 outline-none"
-                  />
-                </div>
-                {dropCoords && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDropCoords(null);
-                      setDropText('');
-                    }}
-                    className="p-1 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800 cursor-pointer"
-                    title="ड्रॉप लोकेशन हटाएं"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+
+                {/* Drop Autocomplete Suggestions Dropdown */}
+                {activeDropdown === 'drop' && (dropSuggestions.length > 0 || isSearchingDrop) && (
+                  <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-slate-850/98 backdrop-blur-xl border border-slate-700 rounded-2xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto animate-in fade-in slide-in-from-top-1">
+                    {isSearchingDrop && dropSuggestions.length === 0 && (
+                      <div className="p-3 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin text-rose-400" />
+                        <span>स्थान खोज रहे हैं...</span>
+                      </div>
+                    )}
+                    {dropSuggestions.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handleSelectDropItem(item)}
+                        className="w-full px-3 py-2.5 text-left hover:bg-slate-750 border-b border-slate-800 last:border-b-0 flex items-start gap-2.5 transition cursor-pointer"
+                      >
+                        <div className="w-6 h-6 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center shrink-0 mt-0.5">
+                          <MapPin className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="block text-xs font-bold text-white truncate">
+                            {item.name}
+                          </span>
+                          <span className="block text-[11px] text-slate-400 truncate">
+                            {item.locality}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
 
               {/* Quick Preset Badges */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1 scrollbar-none text-[11px]">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 pt-0.5 scrollbar-none text-[11px]">
                 {PRESET_PLACES.map((place, idx) => (
                   <button
                     key={idx}
@@ -390,16 +694,45 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                         : 'bg-slate-800 border-slate-750 text-slate-300 hover:text-white hover:border-amber-500/50'
                     }`}
                   >
-                    📍 {place.name}
+                    📍 {place.name.split(' (')[0]}
                   </button>
                 ))}
               </div>
             </div>
           )}
+
+          {/* Interactive Pin-on-Map Instruction Banner */}
+          {pinMode && !activeRide && (
+            <div className="bg-amber-500 text-slate-950 px-3.5 py-2 rounded-2xl shadow-2xl flex items-center justify-between font-extrabold text-xs animate-bounce duration-1000">
+              <div className="flex items-center gap-2">
+                <Crosshair className="w-4 h-4 stroke-[3]" />
+                <span>
+                  {pinMode === 'pickup'
+                    ? 'मैप पर जहाँ से बैठना है वहाँ टैप करें (पिकअप सेट करें)'
+                    : 'मैप पर जहाँ जाना है वहाँ टैप करें (ड्रॉप सेट करें)'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPinMode(null)}
+                className="px-2 py-0.5 rounded-lg bg-slate-950 text-white text-[11px] font-bold"
+              >
+                बंद करें
+              </button>
+            </div>
+          )}
+
+          {/* Reverse Geocoding Indicator */}
+          {isGeocoding && (
+            <div className="bg-slate-900/90 text-amber-400 border border-amber-500/30 px-3 py-1.5 rounded-xl shadow-lg flex items-center justify-center gap-2 text-xs font-bold">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>मैप पर चुना गया पता प्राप्त हो रहा है...</span>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* 2. DYNAMIC FULL-SCREEN LEAFLET MAP VIEWPORT (Section 4 Free OSM Tiles) */}
+      {/* 2. DYNAMIC FULL-SCREEN LEAFLET MAP VIEWPORT */}
       <div className="flex-1 w-full h-full relative">
         <LeafletMap
           center={userCoords}
@@ -415,7 +748,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
 
         {/* Nearby Drivers Count Badge */}
         {!activeRide && (
-          <div className="absolute top-48 left-3 z-20 bg-slate-900/90 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-750 shadow-md text-xs font-semibold text-amber-400 flex items-center gap-1.5">
+          <div className="absolute top-52 left-3 z-20 bg-slate-900/90 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-750 shadow-md text-xs font-semibold text-amber-400 flex items-center gap-1.5 pointer-events-none">
             <Bike className="w-3.5 h-3.5" />
             <span>{activeDrivers.length} बाइक चालक उपलब्ध (Nearby)</span>
           </div>
@@ -426,7 +759,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
       <div className="relative z-30 p-3 pb-5 bg-slate-900/95 border-t border-slate-800 shadow-2xl backdrop-blur-md">
         <div className="max-w-md mx-auto">
           {!activeRide ? (
-            /* Idle Booking View: Fare Preview + Book Ride Button */
+            /* Idle Booking View: Transparent Fare + Book Ride Button (No Commission Display) */
             <div className="space-y-3">
               <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-850 border border-slate-750">
                 <div className="flex items-center gap-3">
@@ -448,7 +781,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                 </div>
               </div>
 
-              {/* SECTION 3: Large "Book Ride" Button without charge display */}
+              {/* Book Ride Button */}
               <button
                 onClick={handleBookRide}
                 className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black text-base shadow-xl shadow-orange-500/25 flex items-center justify-center gap-2 cursor-pointer transition active:scale-98"
@@ -467,7 +800,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
               <p className="text-xs text-slate-400">2-3 KM दायरे में मौजूद राइडर्स को रिक्वेस्ट भेजी जा रही है</p>
               <button
                 onClick={() => store.cancelRide()}
-                className="py-2 px-4 rounded-xl bg-slate-800 text-xs font-semibold text-rose-400 border border-slate-700"
+                className="py-2 px-4 rounded-xl bg-slate-800 text-xs font-semibold text-rose-400 border border-slate-700 cursor-pointer"
               >
                 राइड रद्द करें (Cancel)
               </button>
@@ -487,7 +820,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                 </div>
                 <a
                   href={`tel:${activeRide.driverPhone}`}
-                  className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center"
+                  className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center cursor-pointer"
                 >
                   <Phone className="w-5 h-5" />
                 </a>
@@ -542,7 +875,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                 onClick={() => {
                   store.verifyOtpAndStartRide(activeRide.startOtp);
                 }}
-                className="w-full py-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold text-xs border border-emerald-500/40 transition"
+                className="w-full py-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-bold text-xs border border-emerald-500/40 transition cursor-pointer"
               >
                 सवारी शुरू करें (Test: Start Ride with OTP)
               </button>
@@ -585,7 +918,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                     store.clearActiveRide();
                     setActiveRide(null);
                   }}
-                  className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-750 text-rose-400 font-bold text-xs border border-slate-700 transition"
+                  className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-750 text-rose-400 font-bold text-xs border border-slate-700 transition cursor-pointer"
                 >
                   सफर रद्द करें
                 </button>
@@ -594,14 +927,14 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                   onClick={() => {
                     store.completeRide();
                   }}
-                  className="py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-md transition"
+                  className="py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-md transition cursor-pointer"
                 >
                   सफर समाप्त (End Ride)
                 </button>
               </div>
             </div>
           ) : activeRide.status === 'completed' ? (
-            /* SECTION 9: TRIP COMPLETED SCREEN WITHOUT CHARGE FLASH */
+            /* SECTION 9: TRIP COMPLETED SCREEN (No Commission Flash) */
             <div className="p-5 rounded-3xl bg-slate-850 border-2 border-emerald-500 shadow-2xl text-center space-y-3">
               <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center">
                 <CheckCircle className="w-7 h-7" />
@@ -623,7 +956,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                   setDropCoords(null);
                   setDropText('');
                 }}
-                className="w-full py-3 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs"
+                className="w-full py-3 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs cursor-pointer"
               >
                 नई राइड बुक करें (Book Next Ride)
               </button>

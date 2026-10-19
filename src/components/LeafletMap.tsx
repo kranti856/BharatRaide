@@ -112,6 +112,12 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
   const dropMarkerRef = useRef<L.Marker | null>(null);
   const assignedDriverMarkerRef = useRef<L.Marker | null>(null);
 
+  // Dynamic ref for latest onMapClick callback
+  const onMapClickRef = useRef(onMapClick);
+  useEffect(() => {
+    onMapClickRef.current = onMapClick;
+  }, [onMapClick]);
+
   // Initialize Map Once
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -140,11 +146,11 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
     const driversGroup = L.layerGroup().addTo(map);
     driversLayerRef.current = driversGroup;
 
-    if (onMapClick) {
-      map.on('click', (e) => {
-        onMapClick(e.latlng.lat, e.latlng.lng);
-      });
-    }
+    map.on('click', (e) => {
+      if (onMapClickRef.current) {
+        onMapClickRef.current(e.latlng.lat, e.latlng.lng);
+      }
+    });
 
     mapRef.current = map;
 

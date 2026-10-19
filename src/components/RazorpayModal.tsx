@@ -67,7 +67,7 @@ export const RazorpayModal: React.FC<RazorpayModalProps> = ({
           notes: {
             driver_id: driverId,
             platform_corporate_account: 'BharatRaide Corporate HDFC #502000889922',
-            purpose: 'Driver commission wallet balance',
+            purpose: 'Driver wallet topup',
           },
           theme: {
             color: '#FF9933',
