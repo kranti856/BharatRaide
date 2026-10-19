@@ -351,6 +351,36 @@ class AppStore {
     return ride;
   }
 
+  /**
+   * Real-time GPS coordinate update streamed from driver every 3-5 seconds
+   */
+  public updateRideDriverCoords(
+    rideId: string,
+    coords: [number, number],
+    heading?: number,
+    speedKmph?: number,
+    distanceRemainingKm?: number
+  ): RideRequest | null {
+    const ride = this.getActiveRide();
+    if (!ride || ride.id !== rideId) return null;
+
+    ride.driverCoords = coords;
+    if (heading !== undefined) ride.driverHeading = heading;
+    if (speedKmph !== undefined) ride.driverSpeedKmph = speedKmph;
+    if (distanceRemainingKm !== undefined) ride.driverDistanceToTargetKm = distanceRemainingKm;
+    ride.driverLastUpdated = Date.now();
+
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_RIDE, JSON.stringify(ride));
+
+    // Also update driver registry coords
+    if (ride.driverId) {
+      this.updateDriverLocation(ride.driverId, coords[0], coords[1], heading);
+    }
+
+    this.emitChange();
+    return ride;
+  }
+
   public driverDeclineRide(driverId: string): RideRequest | null {
     const ride = this.getActiveRide();
     if (!ride) return null;

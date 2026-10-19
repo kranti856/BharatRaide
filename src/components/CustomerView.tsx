@@ -25,6 +25,7 @@ import { CustomerProfile, DriverProfile, RideRequest, LocationPoint } from '../t
 import { store } from '../services/store';
 import { LeafletMap } from './LeafletMap';
 import { searchPlaces, reverseGeocode, SearchResultItem } from '../services/locationSearch';
+import { trackingService, DriverGpsLocation } from '../services/trackingService';
 
 interface CustomerViewProps {
   user: CustomerProfile;
@@ -75,9 +76,21 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
   const [pinMode, setPinMode] = useState<'pickup' | 'drop' | null>(null);
   const [isGeocoding, setIsGeocoding] = useState(false);
 
-  // ETA Countdown state
+  // ETA Countdown & Real-Time Driver Tracking states
   const [etaSeconds, setEtaSeconds] = useState<number>(360); // 6 mins default
   const [driverSimCoords, setDriverSimCoords] = useState<[number, number] | null>(null);
+  const [driverHeading, setDriverHeading] = useState<number>(0);
+  const [liveGpsInfo, setLiveGpsInfo] = useState<{
+    speedKmph: number;
+    distanceRemainingKm: number;
+    etaMinutes: number;
+    lastUpdated: number;
+  }>({
+    speedKmph: 30,
+    distanceRemainingKm: 0.8,
+    etaMinutes: 2,
+    lastUpdated: Date.now(),
+  });
   const [routePolyline, setRoutePolyline] = useState<[number, number][] | null>(null);
 
   // Reference container for detecting click outside autocomplete dropdowns
@@ -337,62 +350,71 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
     return () => clearTimeout(autoFallbackTimer);
   };
 
-  // Automated Movement Simulation when In-Trip or Arrived
+  // Real-Time Driver GPS Tracking via Socket.io & 3-5s GPS Stream
   useEffect(() => {
     if (!activeRide) {
       setDriverSimCoords(null);
       setRoutePolyline(null);
+      trackingService.stopDriverBroadcaster();
       return;
     }
 
-    if (activeRide.status === 'accepted') {
-      // Route from driver coords to pickup coords
-      const dCoords = activeRide.driverCoords || [pickupCoords.lat + 0.008, pickupCoords.lng + 0.006];
-      setDriverSimCoords(dCoords);
-      setRoutePolyline([dCoords, [pickupCoords.lat, pickupCoords.lng]]);
+    const { status, id: rideId, pickup, drop } = activeRide;
 
-      // Simulate driver driving to pickup
-      const timer = setTimeout(() => {
-        store.driverArrivedAtPickup();
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-
-    if (activeRide.status === 'arrived') {
-      setDriverSimCoords([pickupCoords.lat, pickupCoords.lng]);
-      if (activeRide.drop) {
-        setRoutePolyline([[pickupCoords.lat, pickupCoords.lng], [activeRide.drop.lat, activeRide.drop.lng]]);
-      }
-    }
-
-    if (activeRide.status === 'in_trip') {
-      // Countdown clock ticking down ETA
-      const interval = setInterval(() => {
-        setEtaSeconds((prev) => {
-          if (prev <= 1) {
-            clearInterval(interval);
-            return 0;
-          }
-          return prev - 1;
+    if (status === 'accepted' || status === 'in_trip' || status === 'arrived') {
+      // 1. Subscribe to live Socket.io updates for this ride
+      const unsubscribe = trackingService.subscribeToRideTracking(rideId, (loc: DriverGpsLocation) => {
+        setDriverSimCoords([loc.lat, loc.lng]);
+        setDriverHeading(loc.heading || 0);
+        setLiveGpsInfo({
+          speedKmph: loc.speedKmph || 32,
+          distanceRemainingKm: loc.distanceRemainingKm || 0.5,
+          etaMinutes: loc.etaMinutes || 2,
+          lastUpdated: loc.timestamp || Date.now(),
         });
 
-        // Gently step the motorcycle icon along the path towards drop location
-        if (activeRide.drop) {
-          setDriverSimCoords((curr) => {
-            const targetLat = activeRide.drop.lat;
-            const targetLng = activeRide.drop.lng;
-            const curLat = curr ? curr[0] : pickupCoords.lat;
-            const curLng = curr ? curr[1] : pickupCoords.lng;
-            const nextLat = curLat + (targetLat - curLat) * 0.04;
-            const nextLng = curLng + (targetLng - curLng) * 0.04;
-            return [nextLat, nextLng];
-          });
+        // Update dynamic route line
+        if (status === 'accepted' && pickup) {
+          setRoutePolyline([[loc.lat, loc.lng], [pickup.lat, pickup.lng]]);
+        } else if (status === 'in_trip' && drop) {
+          setRoutePolyline([[loc.lat, loc.lng], [drop.lat, drop.lng]]);
         }
-      }, 1000);
+      });
 
-      return () => clearInterval(interval);
+      // 2. Resilient driver GPS broadcaster: ensures coordinates move every 3.5s
+      // even if user is testing in single-screen customer mode
+      const startPos: [number, number] = activeRide.driverCoords || [
+        pickup.lat + 0.007,
+        pickup.lng + 0.007,
+      ];
+
+      trackingService.startDriverBroadcaster(
+        rideId,
+        activeRide.driverId || 'driver_auto',
+        startPos,
+        () => {
+          const current = store.getActiveRide();
+          if (current?.status === 'in_trip' && current.drop) {
+            return [current.drop.lat, current.drop.lng];
+          }
+          if (current?.pickup) {
+            return [current.pickup.lat, current.pickup.lng];
+          }
+          return [pickup.lat, pickup.lng];
+        },
+        () => store.getActiveRide()?.status || status
+      );
+
+      return () => {
+        unsubscribe();
+        trackingService.stopDriverBroadcaster();
+      };
+    } else {
+      setDriverSimCoords(null);
+      setRoutePolyline(null);
+      trackingService.stopDriverBroadcaster();
     }
-  }, [activeRide?.status]);
+  }, [activeRide?.id, activeRide?.status]);
 
   const { km, fare } = calculateFareEstimate();
 
@@ -748,6 +770,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
           pickupPoint={activeRide ? activeRide.pickup : pickupCoords}
           dropPoint={activeRide ? activeRide.drop : dropCoords}
           driverMarkerCoords={driverSimCoords}
+          driverHeading={driverHeading}
           routePoints={routePolyline}
           onMapClick={handleMapClick}
         />
@@ -916,24 +939,66 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
               </button>
             </div>
           ) : activeRide.status === 'accepted' ? (
-            /* DRIVER ASSIGNED & COMING TO PICKUP */
+            /* DRIVER ASSIGNED & LIVE GPS TRACKING TO PICKUP (SOCKET.IO) */
             <div className="space-y-3">
-              <div className="p-3 rounded-2xl bg-slate-850 border border-emerald-500/40 flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
-                    चालक आ रहा है (Driver on the way)
+              {/* Real-time Telemetry & GPS Broadcast Status Banner */}
+              <div className="p-3 rounded-2xl bg-slate-850 border border-emerald-500/50 shadow-lg space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                    </span>
+                    <span className="text-[11px] font-black text-emerald-400 tracking-wide">
+                      लाइव GPS ट्रैकिंग सक्रिय (Socket.io Real-Time)
+                    </span>
+                  </div>
+                  <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full font-mono font-bold">
+                    हर 3.5s में अपडेट
                   </span>
-                  <h4 className="text-base font-black text-white">{activeRide.driverName}</h4>
-                  <p className="text-xs text-slate-300 font-mono">
-                    {activeRide.driverVehicle} • {activeRide.driverVehicleNumber}
-                  </p>
                 </div>
-                <a
-                  href={`tel:${activeRide.driverPhone}`}
-                  className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center cursor-pointer"
-                >
-                  <Phone className="w-5 h-5" />
-                </a>
+
+                {/* Live Distance, Speed & ETA Stats */}
+                <div className="grid grid-cols-3 gap-1.5 p-2 rounded-xl bg-slate-900/80 border border-slate-750 text-center">
+                  <div>
+                    <span className="block text-[9px] text-slate-400 uppercase font-bold">दूरी (Distance)</span>
+                    <span className="text-xs font-black text-white font-mono">
+                      ~{liveGpsInfo.distanceRemainingKm} KM
+                    </span>
+                  </div>
+                  <div className="border-x border-slate-750">
+                    <span className="block text-[9px] text-slate-400 uppercase font-bold">गति (Speed)</span>
+                    <span className="text-xs font-black text-emerald-400 font-mono">
+                      {liveGpsInfo.speedKmph} km/h
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-[9px] text-slate-400 uppercase font-bold">अनुमानित (ETA)</span>
+                    <span className="text-xs font-black text-amber-400 font-mono">
+                      ~{liveGpsInfo.etaMinutes} min
+                    </span>
+                  </div>
+                </div>
+
+                {/* Driver Info & Call */}
+                <div className="flex items-center justify-between pt-1">
+                  <div>
+                    <h4 className="text-sm font-black text-white flex items-center gap-1.5">
+                      <Bike className="w-4 h-4 text-emerald-400" />
+                      {activeRide.driverName}
+                    </h4>
+                    <p className="text-[11px] text-slate-300 font-mono">
+                      {activeRide.driverVehicle} • {activeRide.driverVehicleNumber}
+                    </p>
+                  </div>
+                  <a
+                    href={`tel:${activeRide.driverPhone}`}
+                    className="py-1.5 px-3 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 flex items-center gap-1.5 text-xs font-bold transition cursor-pointer"
+                  >
+                    <Phone className="w-3.5 h-3.5" />
+                    <span>कॉल करें</span>
+                  </a>
+                </div>
               </div>
 
               {/* Prominent Cancel Ride Button */}
@@ -944,7 +1009,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                   store.clearActiveRide();
                   setActiveRide(null);
                 }}
-                className="w-full py-3 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border-2 border-rose-500 text-rose-300 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition active:scale-98"
+                className="w-full py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border-2 border-rose-500/80 text-rose-300 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition active:scale-98"
               >
                 <X className="w-4 h-4 stroke-[3]" />
                 <span>राइड रद्द करें (Cancel Ride)</span>
@@ -991,33 +1056,51 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
               </button>
             </div>
           ) : activeRide.status === 'in_trip' ? (
-            /* SECTION 7: LIVE DROP LOCATION TRACKING & ETA COUNTDOWN */
+            /* SECTION 7: LIVE DROP LOCATION TRACKING & ETA COUNTDOWN (SOCKET.IO) */
             <div className="space-y-3">
-              <div className="p-3.5 rounded-2xl bg-slate-850 border border-slate-750 flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center">
-                    <Clock className="w-5 h-5 animate-spin" style={{ animationDuration: '6s' }} />
+              <div className="p-3.5 rounded-2xl bg-slate-850 border border-slate-750 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
+                    </span>
+                    <span className="text-[11px] font-black text-cyan-400 tracking-wide">
+                      सफर जारी है • लाइव GPS मैप ट्रैकिंग
+                    </span>
+                  </div>
+                  <span className="text-xs text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-lg">
+                    {liveGpsInfo.speedKmph} km/h
+                  </span>
+                </div>
+
+                {/* Telemetry Bar: Remaining Distance & ETA */}
+                <div className="grid grid-cols-2 gap-2 p-2 rounded-xl bg-slate-900/80 border border-slate-750 text-center">
+                  <div>
+                    <span className="block text-[9px] text-slate-400 uppercase font-bold">ड्रॉप तक शेष दूरी</span>
+                    <span className="text-sm font-black text-white font-mono">
+                      ~{liveGpsInfo.distanceRemainingKm} KM
+                    </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-bold text-cyan-400 uppercase">
-                      ड्रॉप का अनुमानित समय (ETA)
+                    <span className="block text-[9px] text-slate-400 uppercase font-bold">ड्रॉप का अनुमानित समय (ETA)</span>
+                    <span className="text-sm font-black text-cyan-300 font-mono">
+                      ~{liveGpsInfo.etaMinutes} मिनट
                     </span>
-                    <div className="text-lg font-black text-white font-mono">
-                      {Math.floor(etaSeconds / 60)}m {etaSeconds % 60}s
-                    </div>
                   </div>
                 </div>
 
-                <div className="text-right">
-                  <span className="text-xs text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-lg">
-                    लाइव ट्रैकिंग
-                  </span>
-                </div>
+                {driverSimCoords && (
+                  <div className="text-[10px] text-slate-400 text-center font-mono flex items-center justify-center gap-1.5">
+                    <Radio className="w-3 h-3 text-emerald-400 animate-pulse" />
+                    <span>GPS: {driverSimCoords[0].toFixed(4)}, {driverSimCoords[1].toFixed(4)} (हर 3.5s अपडेट)</span>
+                  </div>
+                )}
               </div>
 
               <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-semibold text-center flex items-center justify-center gap-1.5">
                 <CheckCircle className="w-4 h-4" />
-                <span>सफर जारी है: {activeRide.drop.name}</span>
+                <span>गंतव्य: {activeRide.drop.name}</span>
               </div>
 
               <div className="grid grid-cols-2 gap-2 pt-1">

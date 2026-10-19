@@ -11,23 +11,27 @@ interface LeafletMapProps {
   pickupPoint?: LocationPoint | null;
   dropPoint?: LocationPoint | null;
   driverMarkerCoords?: [number, number] | null;
+  driverHeading?: number;
   routePoints?: [number, number][] | null;
   className?: string;
   onMapClick?: (lat: number, lng: number) => void;
 }
 
-// Custom DivIcon for Bike / Motorcycle
+// Custom DivIcon for Bike / Motorcycle with Live Heading Rotation & Glide Animation
 const createBikeIcon = (heading = 0, isAssigned = false) => {
   const color = isAssigned ? '#10B981' : '#F59E0B';
-  const pulseClass = isAssigned ? 'animate-pulse' : '';
-  
+  const pulseRing = isAssigned
+    ? '<div style="position: absolute; width: 48px; height: 48px; border-radius: 50%; background: rgba(16, 185, 129, 0.35); animation: ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>'
+    : '';
+
   return L.divIcon({
     className: 'custom-bike-marker',
     html: `
-      <div style="position: relative; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">
-        <div style="position: absolute; width: 40px; height: 40px; border-radius: 50%; background: ${color}33; ${pulseClass}"></div>
-        <div style="width: 32px; height: 32px; border-radius: 50%; background: #0F172A; border: 2px solid ${color}; display: flex; align-items: center; justify-content: center; transform: rotate(${heading}deg); box-shadow: 0 4px 10px rgba(0,0,0,0.5);">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <div style="position: relative; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;">
+        ${pulseRing}
+        <div style="position: absolute; width: 36px; height: 36px; border-radius: 50%; background: ${color}22;"></div>
+        <div style="width: 34px; height: 34px; border-radius: 50%; background: #0F172A; border: 2.5px solid ${color}; display: flex; align-items: center; justify-content: center; transform: rotate(${heading}deg); transition: transform 0.6s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.65);">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="5" cy="18" r="3"/>
             <circle cx="19" cy="18" r="3"/>
             <path d="M12 19V9l3 3h4"/>
@@ -36,8 +40,8 @@ const createBikeIcon = (heading = 0, isAssigned = false) => {
         </div>
       </div>
     `,
-    iconSize: [44, 44],
-    iconAnchor: [22, 22],
+    iconSize: [48, 48],
+    iconAnchor: [24, 24],
   });
 };
 
@@ -99,6 +103,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
   pickupPoint,
   dropPoint,
   driverMarkerCoords,
+  driverHeading = 0,
   routePoints,
   className = 'w-full h-full',
   onMapClick,
@@ -323,23 +328,24 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
     }
   }, [pickupPoint?.lat, pickupPoint?.lng, dropPoint?.lat, dropPoint?.lng]);
 
-  // Update Live Assigned Driver Marker (Animated)
+  // Update Live Assigned Driver Marker (Animated Gliding & Real-time GPS Tracking)
   useEffect(() => {
     if (!mapRef.current) return;
     if (driverMarkerCoords) {
       if (!assignedDriverMarkerRef.current) {
         assignedDriverMarkerRef.current = L.marker(driverMarkerCoords, {
-          icon: createBikeIcon(0, true),
+          icon: createBikeIcon(driverHeading, true),
           zIndexOffset: 300,
         }).addTo(mapRef.current);
       } else {
         assignedDriverMarkerRef.current.setLatLng(driverMarkerCoords);
+        assignedDriverMarkerRef.current.setIcon(createBikeIcon(driverHeading, true));
       }
     } else if (assignedDriverMarkerRef.current) {
       assignedDriverMarkerRef.current.remove();
       assignedDriverMarkerRef.current = null;
     }
-  }, [driverMarkerCoords]);
+  }, [driverMarkerCoords, driverHeading]);
 
   // Draw Dynamic Routing Path
   useEffect(() => {

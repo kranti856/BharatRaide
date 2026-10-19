@@ -19,10 +19,12 @@ import {
   VolumeX,
   Check,
   X,
+  Radio,
 } from 'lucide-react';
 import { DriverProfile, RideRequest } from '../types';
 import { store, calculateDistanceKm } from '../services/store';
 import { soundService } from '../services/soundService';
+import { trackingService, DriverGpsLocation } from '../services/trackingService';
 import { LeafletMap } from './LeafletMap';
 import { RazorpayModal } from './RazorpayModal';
 
@@ -115,10 +117,48 @@ export const DriverView: React.FC<DriverViewProps> = ({
     };
   }, [initialDriver.id, driverCoords[0], driverCoords[1]]);
 
+  // Live GPS broadcast state (Socket.io)
+  const [liveBroadcastLocation, setLiveBroadcastLocation] = useState<DriverGpsLocation | null>(null);
+
   // Keep driver position synced to store
   useEffect(() => {
     store.updateDriverLocation(driver.id, driverCoords[0], driverCoords[1]);
   }, [driverCoords[0], driverCoords[1], driver.id]);
+
+  // Live Driver GPS Broadcaster via Socket.io every 3-5 seconds
+  useEffect(() => {
+    if (!activeRide || (activeRide.status !== 'accepted' && activeRide.status !== 'in_trip')) {
+      trackingService.stopDriverBroadcaster();
+      setLiveBroadcastLocation(null);
+      return;
+    }
+
+    const currentPos = activeRide.driverCoords || driverCoords;
+
+    trackingService.startDriverBroadcaster(
+      activeRide.id,
+      driver.id,
+      currentPos,
+      () => {
+        const r = store.getActiveRide();
+        if (r && r.status === 'in_trip' && r.drop) {
+          return [r.drop.lat, r.drop.lng];
+        }
+        if (r && r.pickup) {
+          return [r.pickup.lat, r.pickup.lng];
+        }
+        return [driverCoords[0], driverCoords[1]];
+      },
+      () => store.getActiveRide()?.status || activeRide.status,
+      (loc) => {
+        setLiveBroadcastLocation(loc);
+      }
+    );
+
+    return () => {
+      trackingService.stopDriverBroadcaster();
+    };
+  }, [activeRide?.id, activeRide?.status, driver.id]);
 
   // Toggle Duty
   const handleToggleDuty = () => {
@@ -337,13 +377,26 @@ export const DriverView: React.FC<DriverViewProps> = ({
       {/* 2. DYNAMIC FULLSCREEN LEAFLET MAP VIEWPORT FOR DRIVER */}
       <div className="flex-1 w-full h-full relative">
         <LeafletMap
-          center={driverCoords}
-          userCoords={driverCoords}
+          center={liveBroadcastLocation ? [liveBroadcastLocation.lat, liveBroadcastLocation.lng] : driverCoords}
+          userCoords={liveBroadcastLocation ? [liveBroadcastLocation.lat, liveBroadcastLocation.lng] : driverCoords}
           userRole="driver"
           pickupPoint={activeRide ? activeRide.pickup : null}
           dropPoint={activeRide ? activeRide.drop : null}
+          driverMarkerCoords={liveBroadcastLocation ? [liveBroadcastLocation.lat, liveBroadcastLocation.lng] : null}
+          driverHeading={liveBroadcastLocation ? liveBroadcastLocation.heading : 0}
           routePoints={getDriverRoutePoints()}
         />
+
+        {/* Real-time GPS Broadcasting Indicator */}
+        {activeRide && liveBroadcastLocation && (
+          <div className="absolute top-28 left-3 z-30 bg-slate-900/95 backdrop-blur-md px-3 py-1.5 rounded-full border border-emerald-500/50 shadow-lg text-[11px] font-semibold text-emerald-400 flex items-center gap-2 pointer-events-none">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+            </span>
+            <span>GPS ब्रॉडकास्ट सक्रिय (3.5s • {liveBroadcastLocation.speedKmph} km/h • ~{liveBroadcastLocation.distanceRemainingKm} KM)</span>
+          </div>
+        )}
 
         {/* Status Overlay when Duty is OFF */}
         {!driver.isDutyOn && !activeRide && (

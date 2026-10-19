@@ -69,6 +69,10 @@ export interface RideRequest {
   driverVehicle?: string;
   driverVehicleNumber?: string;
   driverCoords?: [number, number];
+  driverHeading?: number;
+  driverSpeedKmph?: number;
+  driverLastUpdated?: number;
+  driverDistanceToTargetKm?: number;
   startOtp: string; // 4-digit secret OTP
   createdAt: number;
   acceptedAt?: number;
