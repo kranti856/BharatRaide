@@ -90,7 +90,7 @@ export const DriverView: React.FC<DriverViewProps> = ({
     try {
       store.toggleDriverDuty(driver.id, nextState);
     } catch (err: any) {
-      alert(err.message || 'कमीशन बकाया होने के कारण ड्यूटी ऑन नहीं की जा सकती। कृपया वॉलेट रिचार्ज करें।');
+      alert('ड्यूटी ऑन करने के लिए कृपया पहले वॉलेट रिचार्ज करें।');
     }
   };
 
@@ -163,8 +163,39 @@ export const DriverView: React.FC<DriverViewProps> = ({
 
   return (
     <div className="relative w-full h-full flex flex-col overflow-hidden bg-slate-900 select-none">
+      {/* FLOATING TOP BAR FOR DRIVER */}
+      <div className="fixed top-3 left-3 right-3 z-[999999] flex items-center justify-between pointer-events-auto">
+        {onBackToHome && (
+          <button
+            type="button"
+            onClick={() => {
+              store.clearActiveRide();
+              onBackToHome();
+            }}
+            className="py-1.5 px-3.5 rounded-full bg-slate-900/95 text-white border-2 border-amber-500 shadow-2xl flex items-center gap-1.5 text-xs font-black backdrop-blur-md active:scale-95 cursor-pointer hover:bg-slate-800 transition"
+          >
+            <ArrowLeft className="w-4 h-4 text-amber-400 stroke-[3]" />
+            <span>← मुख्य पेज</span>
+          </button>
+        )}
+
+        {activeRide && (
+          <button
+            type="button"
+            onClick={() => {
+              store.cancelRide();
+              store.clearActiveRide();
+              setActiveRide(null);
+            }}
+            className="py-1.5 px-4 rounded-full bg-rose-600 hover:bg-rose-500 text-white border-2 border-rose-300 text-xs font-black shadow-2xl backdrop-blur-md active:scale-95 cursor-pointer flex items-center gap-1.5 transition"
+          >
+            <span>राइड रद्द करें (Cancel)</span>
+          </button>
+        )}
+      </div>
+
       {/* 1. TOP DRIVER CONTROL BAR (Duty ON/OFF Toggle + Wallet Balance) */}
-      <div className="absolute top-0 left-0 right-0 z-30 p-3 pt-3 pointer-events-none">
+      <div className="absolute top-12 left-0 right-0 z-30 p-3 pt-1 pointer-events-none">
         <div className="max-w-md mx-auto space-y-2 pointer-events-auto">
           {/* Main Top Header Strip */}
           <div className="bg-slate-900/95 backdrop-blur-md px-3.5 py-2.5 rounded-2xl border border-slate-750 shadow-2xl flex items-center justify-between">
@@ -225,18 +256,18 @@ export const DriverView: React.FC<DriverViewProps> = ({
             </div>
           </div>
 
-          {/* Negative Balance Alert Warning Banner */}
+          {/* Balance Alert Banner without showing commission or charges */}
           {driver.walletBalance < 0 && (
-            <div className="p-2.5 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-semibold flex items-center justify-between shadow-lg">
+            <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-200 text-xs font-semibold flex items-center justify-between shadow-lg">
               <div className="flex items-center gap-2">
-                <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
-                <span>कमीशन बकाया: ₹{driver.walletBalance.toFixed(2)} (ड्यूटी बंद)</span>
+                <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>ड्यूटी शुरू करने के लिए वॉलेट रिचार्ज करें</span>
               </div>
               <button
                 onClick={() => setIsRazorpayOpen(true)}
-                className="px-2 py-0.5 rounded bg-rose-500 text-white text-[11px] font-bold"
+                className="px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 text-[11px] font-bold"
               >
-                Recharge Now
+                Recharge
               </button>
             </div>
           )}
@@ -294,7 +325,9 @@ export const DriverView: React.FC<DriverViewProps> = ({
                 <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
                 नई सवारी उपलब्ध (New Ride Request)
               </span>
-              <span className="text-xl font-black text-emerald-400 font-mono">₹{incomingRide.fare}</span>
+              <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg">
+                सीधी नकद सवारी
+              </span>
             </div>
 
             <div className="p-3 rounded-2xl bg-slate-850 space-y-2 text-xs">
@@ -434,8 +467,9 @@ export const DriverView: React.FC<DriverViewProps> = ({
                     </p>
                   </div>
                   <div className="text-right">
-                    <span className="text-[10px] text-slate-400">नकद किराया</span>
-                    <div className="text-lg font-black text-emerald-400 font-mono">₹{activeRide.fare}</div>
+                    <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded">
+                      राइड सक्रिय
+                    </span>
                   </div>
                 </div>
 
@@ -445,7 +479,7 @@ export const DriverView: React.FC<DriverViewProps> = ({
                   className="w-full py-4 rounded-2xl bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white font-black text-base shadow-xl shadow-rose-500/25 flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition"
                 >
                   <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
-                  <span>End Ride (सवारी समाप्त करें - ₹{activeRide.fare})</span>
+                  <span>End Ride (सवारी समाप्त करें)</span>
                 </button>
               </div>
             ) : null}
@@ -453,7 +487,7 @@ export const DriverView: React.FC<DriverViewProps> = ({
         </div>
       )}
 
-      {/* 5. SECTION 9 TRIP CONCLUSION MODAL (COMMISSION 12% + ₹3 DEDUCTED) */}
+      {/* 5. SECTION 9 TRIP CONCLUSION MODAL */}
       {completedSummary && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
           <div className="w-full max-w-sm rounded-3xl bg-slate-900 border border-slate-750 p-6 shadow-2xl text-white text-center space-y-4">
@@ -463,17 +497,15 @@ export const DriverView: React.FC<DriverViewProps> = ({
 
             <h3 className="text-xl font-black text-white">सवारी संपन्न! (Ride Completed)</h3>
             <p className="text-xs text-slate-300">
-              ग्राहक से पूरा नकद किराया प्राप्त करें:
+              सवारी सफलतापूर्वक पूरी हो चुकी है।
             </p>
 
-            {/* Clean Cash Fare Receipt - Commission details hidden from driver */}
-            <div className="p-4 rounded-2xl bg-slate-850 border border-slate-750 text-left space-y-2 text-xs">
-              <div className="flex justify-between items-center text-sm font-bold text-white">
-                <span>सवारी से नकद प्राप्त (Cash Fare):</span>
-                <span className="text-emerald-400 font-mono text-xl font-black">₹{completedSummary.fare}</span>
+            <div className="p-4 rounded-2xl bg-slate-850 border border-slate-750 text-center space-y-2 text-xs">
+              <div className="text-sm font-bold text-emerald-400">
+                सवारी संपन्न हो चुकी है
               </div>
               <p className="text-[11px] text-slate-400 pt-1 border-t border-slate-800">
-                सवारी संपन्न हो चुकी है। यह पूरी राशि ग्राहक से नकद प्राप्त करें।
+                अगली सवारी लेने के लिए तैयार रहें।
               </p>
             </div>
 

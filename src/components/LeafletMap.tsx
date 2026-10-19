@@ -123,14 +123,16 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
       attributionControl: false,
       tapHold: true,
       touchZoom: true,
+      scrollWheelZoom: true,
       doubleClickZoom: true,
-      minZoom: 11,
+      minZoom: 10, // Prevent zooming out to entire world map (locks to city/metro region)
       maxZoom: 18,
     });
 
     // 100% Free OpenStreetMap Tiles (No API Key Required)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
+      maxZoom: 18,
+      minZoom: 10,
       attribution: '© OpenStreetMap contributors',
     }).addTo(map);
 
@@ -157,12 +159,13 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
     };
   }, []);
 
-  // Update center when changed
+  // Update center when changed (only if pickup and drop are not actively bound)
   useEffect(() => {
     if (mapRef.current && center) {
+      if (pickupPoint && dropPoint) return;
       mapRef.current.setView(center, mapRef.current.getZoom());
     }
-  }, [center[0], center[1]]);
+  }, [center[0], center[1], pickupPoint, dropPoint]);
 
   // Update user current position marker
   useEffect(() => {
@@ -243,6 +246,77 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
     }
   }, [dropPoint]);
 
+  // AUTOMATIC FITBOUNDS TRACKER FOR PICKUP & DROP LOCATIONS
+  // Ensures pickup and drop points are always tracked and framed cleanly on screen
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const isValidCoord = (pt?: LocationPoint | null) =>
+      pt &&
+      typeof pt.lat === 'number' &&
+      typeof pt.lng === 'number' &&
+      !isNaN(pt.lat) &&
+      !isNaN(pt.lng) &&
+      isFinite(pt.lat) &&
+      isFinite(pt.lng) &&
+      pt.lat !== 0 &&
+      pt.lng !== 0;
+
+    const hasPickup = isValidCoord(pickupPoint);
+    const hasDrop = isValidCoord(dropPoint);
+
+    if (hasPickup && hasDrop) {
+      try {
+        map.invalidateSize();
+        const pLat = pickupPoint!.lat;
+        const pLng = pickupPoint!.lng;
+        const dLat = dropPoint!.lat;
+        const dLng = dropPoint!.lng;
+
+        // If both points are identical, center with high zoom
+        if (Math.abs(pLat - dLat) < 0.0001 && Math.abs(pLng - dLng) < 0.0001) {
+          map.setView([pLat, pLng], 15, { animate: true });
+          return;
+        }
+
+        const bounds = L.latLngBounds([
+          [pLat, pLng],
+          [dLat, dLng],
+        ]);
+
+        if (bounds.isValid()) {
+          // Fit both points with generous padding for top and bottom UI controls
+          map.fitBounds(bounds, {
+            paddingTopLeft: [50, 100],
+            paddingBottomRight: [50, 180],
+            maxZoom: 16,
+            animate: true,
+          });
+
+          // Safeguard: Ensure zoom never drops below 11 (preventing whole world map)
+          setTimeout(() => {
+            if (mapRef.current) {
+              const currentZoom = mapRef.current.getZoom();
+              if (currentZoom < 11) {
+                mapRef.current.setZoom(12);
+              }
+            }
+          }, 250);
+        }
+      } catch (err) {
+        console.warn('fitBounds error for pickup/drop:', err);
+      }
+    } else if (hasPickup && !hasDrop) {
+      try {
+        map.invalidateSize();
+        map.setView([pickupPoint!.lat, pickupPoint!.lng], 15, { animate: true });
+      } catch (err) {
+        // ignore
+      }
+    }
+  }, [pickupPoint?.lat, pickupPoint?.lng, dropPoint?.lat, dropPoint?.lng]);
+
   // Update Live Assigned Driver Marker (Animated)
   useEffect(() => {
     if (!mapRef.current) return;
@@ -285,9 +359,18 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
       // Fit bounds nicely without excessive zoom out
       try {
         const bounds = polyline.getBounds();
-        mapRef.current.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
-        if (mapRef.current.getZoom() < 13) {
-          mapRef.current.setZoom(14);
+        if (bounds.isValid()) {
+          mapRef.current.fitBounds(bounds, {
+            paddingTopLeft: [50, 100],
+            paddingBottomRight: [50, 180],
+            maxZoom: 16,
+            animate: true,
+          });
+          setTimeout(() => {
+            if (mapRef.current && mapRef.current.getZoom() < 12) {
+              mapRef.current.setZoom(12);
+            }
+          }, 250);
         }
       } catch (e) {
         // ignore bounds fit error
@@ -300,11 +383,28 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
   };
 
   const handleZoomOut = () => {
-    if (mapRef.current) mapRef.current.zoomOut();
+    if (mapRef.current && mapRef.current.getZoom() > 10) {
+      mapRef.current.zoomOut();
+    }
   };
 
   const handleRecenter = () => {
     if (mapRef.current) {
+      if (pickupPoint && dropPoint) {
+        const bounds = L.latLngBounds([
+          [pickupPoint.lat, pickupPoint.lng],
+          [dropPoint.lat, dropPoint.lng],
+        ]);
+        if (bounds.isValid()) {
+          mapRef.current.fitBounds(bounds, {
+            paddingTopLeft: [50, 100],
+            paddingBottomRight: [50, 180],
+            maxZoom: 16,
+            animate: true,
+          });
+          return;
+        }
+      }
       const target = userCoords || center;
       mapRef.current.setView(target, 15);
     }
@@ -315,27 +415,29 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
       <div ref={containerRef} style={{ width: '100%', height: '100%', minHeight: '300px' }} />
 
       {/* Mobile Touch Zoom Controls (+ / − / 🎯) */}
-      <div className="absolute right-3 top-36 z-[400] flex flex-col gap-2 pointer-events-auto">
+      <div className="absolute right-3 top-28 z-[999] flex flex-col gap-2.5 pointer-events-auto">
         <button
           type="button"
           onClick={handleZoomIn}
-          className="w-10 h-10 rounded-xl bg-slate-900/95 text-white border border-slate-700 shadow-xl flex items-center justify-center font-bold text-xl active:scale-95 hover:bg-slate-800 cursor-pointer"
+          className="w-11 h-11 rounded-2xl bg-slate-900/95 text-white border-2 border-slate-700 shadow-2xl flex items-center justify-center font-black text-2xl active:scale-90 hover:bg-slate-800 cursor-pointer"
           aria-label="Zoom In"
+          title="Zoom In"
         >
           +
         </button>
         <button
           type="button"
           onClick={handleZoomOut}
-          className="w-10 h-10 rounded-xl bg-slate-900/95 text-white border border-slate-700 shadow-xl flex items-center justify-center font-bold text-xl active:scale-95 hover:bg-slate-800 cursor-pointer"
+          className="w-11 h-11 rounded-2xl bg-slate-900/95 text-white border-2 border-slate-700 shadow-2xl flex items-center justify-center font-black text-2xl active:scale-90 hover:bg-slate-800 cursor-pointer"
           aria-label="Zoom Out"
+          title="Zoom Out"
         >
           −
         </button>
         <button
           type="button"
           onClick={handleRecenter}
-          className="w-10 h-10 rounded-xl bg-slate-900/95 text-amber-400 border border-slate-700 shadow-xl flex items-center justify-center active:scale-95 hover:bg-slate-800 cursor-pointer text-base font-bold"
+          className="w-11 h-11 rounded-2xl bg-slate-900/95 text-amber-400 border-2 border-slate-700 shadow-2xl flex items-center justify-center active:scale-90 hover:bg-slate-800 cursor-pointer text-lg font-bold"
           aria-label="Recenter GPS"
           title="वर्तमान स्थान"
         >

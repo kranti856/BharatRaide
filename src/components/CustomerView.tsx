@@ -102,6 +102,32 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
     setDropText(place.name);
   };
 
+  // Map Click to choose Drop Location
+  const handleMapClick = (lat: number, lng: number) => {
+    if (activeRide) return;
+    const drop: LocationPoint = {
+      name: 'मैप पर चुना गया स्थान',
+      lat,
+      lng,
+    };
+    setDropCoords(drop);
+    setDropText('मैप पर चुना गया स्थान');
+  };
+
+  // Automatically sync preview route line between pickup and drop
+  useEffect(() => {
+    if (!activeRide) {
+      if (pickupCoords && dropCoords) {
+        setRoutePolyline([
+          [pickupCoords.lat, pickupCoords.lng],
+          [dropCoords.lat, dropCoords.lng],
+        ]);
+      } else {
+        setRoutePolyline(null);
+      }
+    }
+  }, [pickupCoords.lat, pickupCoords.lng, dropCoords?.lat, dropCoords?.lng, activeRide]);
+
   // Calculate Distance & Fare (Standard Bike Taxi fare: ₹20 base + ₹9/km)
   const calculateFareEstimate = () => {
     if (!dropCoords) return { km: 3.2, fare: 48 };
@@ -332,10 +358,23 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                         selectPresetDrop(PRESET_PLACES[0]);
                       }
                     }}
-                    placeholder="कहाँ जाना है? (Where to drop?)"
+                    placeholder="कहाँ जाना है? (मैप पर क्लिक करें या चुनें)"
                     className="w-full bg-transparent text-xs font-semibold text-white placeholder-slate-400 outline-none"
                   />
                 </div>
+                {dropCoords && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDropCoords(null);
+                      setDropText('');
+                    }}
+                    className="p-1 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800 cursor-pointer"
+                    title="ड्रॉप लोकेशन हटाएं"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
 
               {/* Quick Preset Badges */}
@@ -345,9 +384,13 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                     key={idx}
                     type="button"
                     onClick={() => selectPresetDrop(place)}
-                    className="shrink-0 px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-750 text-slate-300 hover:text-white hover:border-amber-500/50 transition cursor-pointer"
+                    className={`shrink-0 px-2.5 py-1 rounded-lg border text-xs font-medium transition cursor-pointer ${
+                      dropCoords && dropCoords.name === place.name
+                        ? 'bg-rose-500/20 border-rose-500 text-rose-300 font-bold'
+                        : 'bg-slate-800 border-slate-750 text-slate-300 hover:text-white hover:border-amber-500/50'
+                    }`}
                   >
-                    {place.name}
+                    📍 {place.name}
                   </button>
                 ))}
               </div>
@@ -367,6 +410,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
           dropPoint={activeRide ? activeRide.drop : dropCoords}
           driverMarkerCoords={driverSimCoords}
           routePoints={routePolyline}
+          onMapClick={handleMapClick}
         />
 
         {/* Nearby Drivers Count Badge */}
@@ -398,20 +442,19 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                 </div>
 
                 <div className="text-right">
-                  <div className="text-xl font-black text-amber-400 font-mono">₹{fare}</div>
-                  <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded">
-                    CASH DIRECT
+                  <span className="text-xs text-emerald-400 font-bold bg-emerald-500/10 px-2 py-1 rounded">
+                    नकद यात्रा
                   </span>
                 </div>
               </div>
 
-              {/* SECTION 3: Large "Book Ride" Button */}
+              {/* SECTION 3: Large "Book Ride" Button without charge display */}
               <button
                 onClick={handleBookRide}
                 className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black text-base shadow-xl shadow-orange-500/25 flex items-center justify-center gap-2 cursor-pointer transition active:scale-98"
               >
                 <Bike className="w-5 h-5 stroke-[2.5]" />
-                <span>Book Ride (राइड बुक करें - ₹{fare})</span>
+                <span>Book Ride (राइड बुक करें)</span>
               </button>
             </div>
           ) : activeRide.status === 'searching' ? (
@@ -523,8 +566,9 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                 </div>
 
                 <div className="text-right">
-                  <span className="text-[10px] text-slate-400 font-medium">कुल किराया (Fare)</span>
-                  <div className="text-lg font-black text-amber-400 font-mono">₹{activeRide.fare}</div>
+                  <span className="text-xs text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-lg">
+                    लाइव ट्रैकिंग
+                  </span>
                 </div>
               </div>
 
@@ -557,7 +601,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
               </div>
             </div>
           ) : activeRide.status === 'completed' ? (
-            /* SECTION 9: CASH FARE FLASH ON CUSTOMER SCREEN */
+            /* SECTION 9: TRIP COMPLETED SCREEN WITHOUT CHARGE FLASH */
             <div className="p-5 rounded-3xl bg-slate-850 border-2 border-emerald-500 shadow-2xl text-center space-y-3">
               <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center">
                 <CheckCircle className="w-7 h-7" />
@@ -565,13 +609,11 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
 
               <h4 className="text-lg font-black text-white">सफर समाप्त हुआ (Ride Completed)</h4>
               <p className="text-xs text-slate-300">
-                कृपया ड्राइवर को पूरा किराया नकद (CASH) में दें:
+                सवारी सुरक्षित रूप से पूरी हो चुकी है।
               </p>
 
-              {/* Total Cash Fare Flash */}
-              <div className="py-3 px-8 rounded-2xl bg-emerald-500/10 border border-emerald-500/40 inline-block">
-                <span className="text-xs text-emerald-400 font-bold block">देय नकद राशि (Cash to Pay)</span>
-                <span className="text-3xl font-black text-emerald-400 font-mono">₹{activeRide.fare}</span>
+              <div className="py-2 px-6 rounded-2xl bg-emerald-500/10 border border-emerald-500/40 inline-block">
+                <span className="text-xs text-emerald-400 font-bold block">सवारी संपन्न</span>
               </div>
 
               <button
