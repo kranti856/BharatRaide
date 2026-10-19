@@ -107,84 +107,111 @@ export const RoleSelection: React.FC<RoleSelectionProps> = ({ onRegisterSubmit, 
       </div>
 
       {/* Main Choice or Form Card */}
+      {/* Main Choice or Form Card */}
       <div className="my-auto py-6">
         {!selectedRole ? (
           <div className="space-y-4">
             <div className="text-center mb-6">
-              <h2 className="text-lg font-bold text-white">आप BharatRaide का उपयोग किस प्रकार करना चाहते हैं?</h2>
-              <p className="text-xs text-slate-400 mt-1">अपनी भूमिका चुनें और सीधे ऐप का आनंद लें</p>
+              <span className="text-xs font-black uppercase tracking-wider text-amber-400 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20 inline-block mb-2">
+                लॉगिन / भूमिका चयन
+              </span>
+              <h2 className="text-xl font-black text-white">आप क्या हैं? कृपया अपनी भूमिका चुनें:</h2>
+              <p className="text-xs text-slate-300 mt-1">आप 'कस्टमर' हैं या 'राइडर'? चुनें और आगे बढ़ें</p>
             </div>
 
-            {/* Customer Button */}
-            <button
+            {/* Customer Option */}
+            <div
               onClick={() => {
                 setSelectedRole('customer');
                 setFormError('');
               }}
-              className="w-full group p-5 rounded-3xl bg-gradient-to-br from-slate-800 to-slate-850 hover:from-slate-750 hover:to-slate-800 border-2 border-slate-700 hover:border-amber-500 text-left transition-all duration-200 shadow-xl relative overflow-hidden"
+              className="w-full group p-5 rounded-3xl bg-gradient-to-br from-slate-800 to-slate-850 hover:from-slate-750 hover:to-slate-800 border-2 border-slate-700 hover:border-amber-500 text-left transition-all duration-200 shadow-xl relative overflow-hidden cursor-pointer"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 group-hover:scale-105 transition-transform">
+                  <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 group-hover:scale-105 transition-transform shrink-0">
                     <User className="w-7 h-7" />
                   </div>
                   <div>
-                    <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">राइडर (सवारी)</span>
-                    <h3 className="text-xl font-extrabold text-white">Customer</h3>
-                    <p className="text-xs text-slate-400 mt-0.5">सस्ती व सुरक्षित बाइक राइड तुरंत बुक करें</p>
+                    <span className="text-xs font-black text-amber-400 uppercase tracking-wider">भूमिका 1 • सवारी</span>
+                    <h3 className="text-xl font-black text-white">कस्टमर (Customer)</h3>
+                    <p className="text-xs text-slate-300 mt-0.5">सस्ती व सुरक्षित बाइक राइड बुक करें • लाइव GPS ट्रैकिंग</p>
                   </div>
                 </div>
-                <ArrowRight className="w-6 h-6 text-slate-400 group-hover:text-amber-400 group-hover:translate-x-1 transition-all" />
+                <ArrowRight className="w-6 h-6 text-slate-400 group-hover:text-amber-400 group-hover:translate-x-1 transition-all shrink-0 ml-2" />
               </div>
-            </button>
 
-            {/* Driver Button */}
-            <button
+              {/* Instant Customer Login button */}
+              <div className="mt-3.5 pt-3 border-t border-slate-700/60 flex items-center justify-between">
+                <span className="text-[11px] text-slate-400">फोन नंबर से नया पंजीकरण</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRegisterSubmit(
+                      {
+                        name: 'अमित शर्मा (Amit Sharma)',
+                        phone: '9876543210',
+                        role: 'customer',
+                      },
+                      'customer'
+                    );
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95 transition"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>⚡ तुरंत कस्टमर लॉगिन (1-Click)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Rider (Driver) Option */}
+            <div
               onClick={() => {
                 setSelectedRole('driver');
                 setFormError('');
               }}
-              className="w-full group p-5 rounded-3xl bg-gradient-to-br from-slate-800 to-slate-850 hover:from-slate-750 hover:to-slate-800 border-2 border-slate-700 hover:border-emerald-500 text-left transition-all duration-200 shadow-xl relative overflow-hidden"
+              className="w-full group p-5 rounded-3xl bg-gradient-to-br from-slate-800 to-slate-850 hover:from-slate-750 hover:to-slate-800 border-2 border-slate-700 hover:border-emerald-500 text-left transition-all duration-200 shadow-xl relative overflow-hidden cursor-pointer"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-transform">
+                  <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-transform shrink-0">
                     <Bike className="w-7 h-7" />
                   </div>
                   <div>
-                    <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">पायलट (चालक)</span>
-                    <h3 className="text-xl font-extrabold text-white">Drive</h3>
-                    <p className="text-xs text-slate-400 mt-0.5">अपनी बाइक चलाएं, सीधा कैश कमाएं</p>
+                    <span className="text-xs font-black text-emerald-400 uppercase tracking-wider">भूमिका 2 • चालक</span>
+                    <h3 className="text-xl font-black text-white">राइडर (Rider / Driver)</h3>
+                    <p className="text-xs text-slate-300 mt-0.5">ड्यूटी ऑन/ऑफ, आने वाली राइड्स और कमाई डैशबोर्ड</p>
                   </div>
                 </div>
-                <ArrowRight className="w-6 h-6 text-slate-400 group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" />
+                <ArrowRight className="w-6 h-6 text-slate-400 group-hover:text-emerald-400 group-hover:translate-x-1 transition-all shrink-0 ml-2" />
               </div>
-            </button>
 
-            {/* Quick Demo Pre-fills for Instant Testing */}
-            <div className="pt-4 flex items-center justify-center gap-3 text-xs">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedRole('customer');
-                  autofillCustomer();
-                }}
-                className="px-3 py-1.5 rounded-full bg-slate-800 border border-slate-750 text-slate-300 hover:text-white hover:border-amber-500/50 flex items-center gap-1.5 transition"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>Test as Customer</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedRole('driver');
-                  autofillDriver();
-                }}
-                className="px-3 py-1.5 rounded-full bg-slate-800 border border-slate-750 text-slate-300 hover:text-white hover:border-emerald-500/50 flex items-center gap-1.5 transition"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Test as Driver</span>
-              </button>
+              {/* Instant Rider Login button */}
+              <div className="mt-3.5 pt-3 border-t border-slate-700/60 flex items-center justify-between">
+                <span className="text-[11px] text-slate-400">बाइक व DL विवरण से पंजीकरण</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRegisterSubmit(
+                      {
+                        name: 'रमेश कुमार (Ramesh Kumar)',
+                        phone: '9876543210',
+                        role: 'driver',
+                        vehicleModel: 'Hero Splendor Plus',
+                        vehicleNumber: 'UP32-AK-4421',
+                        dlNumber: 'DL-0420190012345',
+                      },
+                      'driver'
+                    );
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95 transition"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>⚡ तुरंत राइडर लॉगिन (1-Click)</span>
+                </button>
+              </div>
             </div>
           </div>
         ) : selectedRole === 'customer' ? (

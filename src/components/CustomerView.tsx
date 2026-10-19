@@ -470,13 +470,18 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
             </div>
 
             <div className="flex items-center gap-1.5">
+              {onBackToHome && (
+                <button
+                  type="button"
+                  onClick={onBackToHome}
+                  className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white text-[11px] font-semibold border border-slate-700 transition cursor-pointer"
+                  title="लॉगआउट / बाहर निकलें"
+                >
+                  लॉगआउट (Logout)
+                </button>
+              )}
               <button
-                onClick={onSwitchRole}
-                className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 text-[11px] font-semibold border border-slate-700 transition"
-              >
-                Switch Role
-              </button>
-              <button
+                type="button"
                 onClick={onOpenInstall}
                 className="px-2.5 py-1 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-[11px] font-extrabold shadow-sm transition"
               >

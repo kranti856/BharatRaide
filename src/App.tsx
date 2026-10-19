@@ -127,28 +127,6 @@ export default function App() {
     setPendingRegistration(null);
   };
 
-  // Switch role handler (allows jumping between customer & driver seamlessly)
-  const handleSwitchRole = () => {
-    if (!currentUser) return;
-    if (currentUser.role === 'customer') {
-      // Find or switch to test driver
-      const drivers = store.getDrivers();
-      const testDriver = drivers[0];
-      store.setCurrentUser(testDriver);
-      setCurrentUser(testDriver);
-    } else {
-      const testCust: CustomerProfile = {
-        id: 'cust_switch_1',
-        name: 'Aakash Verma',
-        phone: '9876543210',
-        role: 'customer',
-        createdAt: Date.now(),
-      };
-      store.setCurrentUser(testCust);
-      setCurrentUser(testCust);
-    }
-  };
-
   const handleBackToHome = () => {
     store.setCurrentUser(null);
     setCurrentUser(null);
@@ -180,7 +158,6 @@ export default function App() {
         <CustomerView
           user={currentUser}
           userCoords={currentCoords}
-          onSwitchRole={handleSwitchRole}
           onOpenInstall={() => pwa.setShowInstallModal(true)}
           onBackToHome={handleBackToHome}
         />
@@ -189,7 +166,6 @@ export default function App() {
         <DriverView
           driver={currentUser}
           driverCoords={currentCoords}
-          onSwitchRole={handleSwitchRole}
           onOpenInstall={() => pwa.setShowInstallModal(true)}
           onBackToHome={handleBackToHome}
         />

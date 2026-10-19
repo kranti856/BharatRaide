@@ -20,6 +20,8 @@ import {
   Check,
   X,
   Radio,
+  Award,
+  Sparkles,
 } from 'lucide-react';
 import { DriverProfile, RideRequest } from '../types';
 import { store, calculateDistanceKm } from '../services/store';
@@ -31,7 +33,6 @@ import { RazorpayModal } from './RazorpayModal';
 interface DriverViewProps {
   driver: DriverProfile;
   driverCoords: [number, number];
-  onSwitchRole?: () => void;
   onOpenInstall?: () => void;
   onBackToHome?: () => void;
 }
@@ -39,7 +40,6 @@ interface DriverViewProps {
 export const DriverView: React.FC<DriverViewProps> = ({
   driver: initialDriver,
   driverCoords,
-  onSwitchRole,
   onOpenInstall,
   onBackToHome,
 }) => {
@@ -48,6 +48,7 @@ export const DriverView: React.FC<DriverViewProps> = ({
   const [incomingRide, setIncomingRide] = useState<RideRequest | null>(null);
   const [isRazorpayOpen, setIsRazorpayOpen] = useState(false);
   const [isMuted, setIsMuted] = useState(soundService.getIsMuted());
+  const [riderTab, setRiderTab] = useState<'dashboard' | 'map'>('dashboard');
 
   // OTP Input State for starting ride
   const [otpInput, setOtpInput] = useState('');
@@ -280,19 +281,22 @@ export const DriverView: React.FC<DriverViewProps> = ({
         <div className="max-w-md mx-auto space-y-2 pointer-events-auto">
           {/* Main Top Header Strip */}
           <div className="bg-slate-900/95 backdrop-blur-md px-3.5 py-2.5 rounded-2xl border border-slate-750 shadow-2xl flex items-center justify-between">
-            {/* Duty ON/OFF Switch */}
+            {/* Duty ON/OFF Switch & Logout Button */}
             <div className="flex items-center gap-1.5">
               {onBackToHome && (
                 <button
+                  type="button"
                   onClick={onBackToHome}
-                  className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 transition flex items-center justify-center cursor-pointer"
-                  title="मुख्य पेज पर वापस जाएं (Back to Home)"
-                  aria-label="Back to Home"
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 transition flex items-center gap-1 text-xs font-bold cursor-pointer"
+                  title="लॉगआउट करें (Logout)"
+                  aria-label="Logout"
                 >
-                  <ArrowLeft className="w-4 h-4" />
+                  <ArrowLeft className="w-3.5 h-3.5 text-amber-400" />
+                  <span>लॉगआउट</span>
                 </button>
               )}
               <button
+                type="button"
                 onClick={handleToggleDuty}
                 disabled={driver.walletBalance < 0 && !driver.isDutyOn}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer shadow-md ${
@@ -304,16 +308,9 @@ export const DriverView: React.FC<DriverViewProps> = ({
                 <Power className={`w-3.5 h-3.5 stroke-[3] ${driver.isDutyOn ? 'animate-pulse' : ''}`} />
                 <span>{driver.isDutyOn ? 'DUTY ON' : 'DUTY OFF'}</span>
               </button>
-
-              <button
-                onClick={onSwitchRole}
-                className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-400 hover:text-slate-200 text-[11px] font-semibold border border-slate-700 transition"
-              >
-                Switch
-              </button>
             </div>
 
-            {/* SECTION 3: Driver Wallet Balance in Bold Numeric Font & Recharge Button */}
+            {/* Driver Wallet Balance in Bold Numeric Font & Recharge Button */}
             <div className="flex items-center gap-2">
               <div className="text-right">
                 <span className="text-[10px] font-semibold text-slate-400 block uppercase">वॉलेट (Wallet)</span>
@@ -328,6 +325,7 @@ export const DriverView: React.FC<DriverViewProps> = ({
 
               {/* Dedicated "Recharge Wallet" button tied to Razorpay */}
               <button
+                type="button"
                 onClick={() => setIsRazorpayOpen(true)}
                 className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 text-xs font-extrabold flex items-center gap-1 shadow-md shadow-orange-500/20 cursor-pointer active:scale-95 transition"
               >
@@ -345,6 +343,7 @@ export const DriverView: React.FC<DriverViewProps> = ({
                 <span>ड्यूटी शुरू करने के लिए वॉलेट रिचार्ज करें</span>
               </div>
               <button
+                type="button"
                 onClick={() => setIsRazorpayOpen(true)}
                 className="px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 text-[11px] font-bold"
               >
@@ -356,7 +355,7 @@ export const DriverView: React.FC<DriverViewProps> = ({
           {/* Driver Vehicle Pill info & Test Loud Ring button */}
           <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 backdrop-blur-sm rounded-xl border border-slate-800 text-[11px] text-slate-400">
             <span className="truncate mr-2">
-              पायलट: <strong className="text-white">{driver.name}</strong> • {driver.vehicleModel}
+              राइडर: <strong className="text-white">{driver.name}</strong> • {driver.vehicleModel}
             </span>
             <div className="flex items-center gap-2 shrink-0">
               <span className="font-mono text-amber-400 font-bold">{driver.vehicleNumber}</span>
@@ -371,52 +370,313 @@ export const DriverView: React.FC<DriverViewProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Tab Switcher: Earning Dashboard vs Live Map (when not in active trip) */}
+          {!activeRide && (
+            <div className="flex items-center p-1 rounded-2xl bg-slate-900/95 border border-slate-800 shadow-xl pointer-events-auto">
+              <button
+                type="button"
+                onClick={() => setRiderTab('dashboard')}
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                  riderTab === 'dashboard'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 shadow-lg shadow-orange-500/20'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <TrendingUp className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>कमाई डैशबोर्ड (Earnings)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setRiderTab('map')}
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                  riderTab === 'map'
+                    ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <MapPin className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>लाइव मैप (Map)</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* 2. DYNAMIC FULLSCREEN LEAFLET MAP VIEWPORT FOR DRIVER */}
-      <div className="flex-1 w-full h-full relative">
-        <LeafletMap
-          center={liveBroadcastLocation ? [liveBroadcastLocation.lat, liveBroadcastLocation.lng] : driverCoords}
-          userCoords={liveBroadcastLocation ? [liveBroadcastLocation.lat, liveBroadcastLocation.lng] : driverCoords}
-          userRole="driver"
-          pickupPoint={activeRide ? activeRide.pickup : null}
-          dropPoint={activeRide ? activeRide.drop : null}
-          driverMarkerCoords={liveBroadcastLocation ? [liveBroadcastLocation.lat, liveBroadcastLocation.lng] : null}
-          driverHeading={liveBroadcastLocation ? liveBroadcastLocation.heading : 0}
-          routePoints={getDriverRoutePoints()}
-        />
+      {/* 2. MAIN VIEWPORT: ACTIVE RIDE / EARNING DASHBOARD / LEAFLET MAP */}
+      <div className="flex-1 w-full h-full relative overflow-hidden flex flex-col">
+        {!activeRide && riderTab === 'dashboard' ? (
+          /* SECTION: RIDER EARNING DASHBOARD */
+          <div className="flex-1 w-full overflow-y-auto pt-48 pb-12 px-3.5 max-w-md mx-auto space-y-3.5">
+            {/* Duty Status Hero Card */}
+            <div
+              className={`p-4 rounded-3xl border-2 transition shadow-xl ${
+                driver.isDutyOn
+                  ? 'bg-gradient-to-br from-slate-900 via-emerald-950/20 to-slate-900 border-emerald-500/50 shadow-emerald-500/10'
+                  : 'bg-slate-850/90 border-slate-750'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
+                      driver.isDutyOn
+                        ? 'bg-emerald-500/20 text-emerald-400 animate-pulse'
+                        : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    <Power className="w-5 h-5 stroke-[2.5]" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                      ड्यूटी स्थिति (Duty Status)
+                    </span>
+                    <h3 className={`text-base font-black ${driver.isDutyOn ? 'text-emerald-400' : 'text-slate-300'}`}>
+                      {driver.isDutyOn ? '🟢 ड्यूटी ऑन (Duty ON)' : '⚪ ड्यूटी ऑफ़ (Duty OFF)'}
+                    </h3>
+                  </div>
+                </div>
 
-        {/* Real-time GPS Broadcasting Indicator */}
-        {activeRide && liveBroadcastLocation && (
-          <div className="absolute top-28 left-3 z-30 bg-slate-900/95 backdrop-blur-md px-3 py-1.5 rounded-full border border-emerald-500/50 shadow-lg text-[11px] font-semibold text-emerald-400 flex items-center gap-2 pointer-events-none">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-            </span>
-            <span>GPS ब्रॉडकास्ट सक्रिय (3.5s • {liveBroadcastLocation.speedKmph} km/h • ~{liveBroadcastLocation.distanceRemainingKm} KM)</span>
-          </div>
-        )}
-
-        {/* Status Overlay when Duty is OFF */}
-        {!driver.isDutyOn && !activeRide && (
-          <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-[2px] z-20 flex items-center justify-center p-4">
-            <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-750 text-center max-w-xs shadow-2xl">
-              <div className="w-12 h-12 rounded-full bg-slate-800 text-slate-400 mx-auto mb-3 flex items-center justify-center">
-                <Power className="w-6 h-6" />
+                <button
+                  type="button"
+                  onClick={handleToggleDuty}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-black shadow-md transition cursor-pointer active:scale-95 ${
+                    driver.isDutyOn
+                      ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40'
+                      : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
+                  }`}
+                >
+                  {driver.isDutyOn ? 'ड्यूटी बंद करें' : 'ड्यूटी शुरू करें'}
+                </button>
               </div>
-              <h4 className="text-base font-extrabold text-white">आप अभी ऑफ़लाइन हैं (Duty OFF)</h4>
-              <p className="text-xs text-slate-400 mt-1 mb-4">
-                सवारी अनुरोध प्राप्त करने के लिए ऊपर दिए गए स्विच से "DUTY ON" करें।
-              </p>
-              <button
-                onClick={handleToggleDuty}
-                disabled={driver.walletBalance < 0}
-                className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/20"
-              >
-                {driver.walletBalance < 0 ? 'पहले वॉलेट रिचार्ज करें' : 'Start Duty (ड्यूटी ऑन करें)'}
-              </button>
+
+              {driver.isDutyOn ? (
+                <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-2.5 text-xs text-emerald-200">
+                  <div className="relative flex h-3 w-3 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
+                  </div>
+                  <span className="font-semibold">
+                    आप ऑनलाइन हैं • 2-5 KM के दायरे में आने वाली नई सवारी रिक्वेस्ट की घंटी बजेगी!
+                  </span>
+                </div>
+              ) : (
+                <div className="p-3 rounded-2xl bg-slate-800/80 border border-slate-700 text-xs text-slate-400">
+                  आप अभी ऑफ़लाइन हैं। नई राइड्स प्राप्त करने के लिए ऊपर से "ड्यूटी ऑन" करें।
+                </div>
+              )}
             </div>
+
+            {/* Main Earnings Card */}
+            {(() => {
+              const summary = store.getDriverEarningsSummary(driver.id);
+              return (
+                <>
+                  <div className="p-4 rounded-3xl bg-gradient-to-br from-slate-850 to-slate-900 border border-amber-500/30 shadow-2xl relative overflow-hidden">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                        <TrendingUp className="w-4 h-4" />
+                        <span>आज की कुल कमाई (Today's Earnings)</span>
+                      </span>
+                      <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">
+                        नेट पेआउट
+                      </span>
+                    </div>
+
+                    <div className="mt-2 flex items-baseline gap-2">
+                      <span className="text-4xl font-black font-mono tracking-tight text-emerald-400">
+                        ₹{summary.todayNetEarnings.toFixed(2)}
+                      </span>
+                      <span className="text-xs font-semibold text-slate-400">
+                        ({summary.todayRidesCount} राइड्स पूरी)
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      कमीशन कटने के बाद आपके पास सीधा नकद टेक-होम पेआउट
+                    </p>
+                  </div>
+
+                  {/* 4-Stat Quick Metrics Grid */}
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {/* Today's Rides */}
+                    <div className="p-3.5 rounded-2xl bg-slate-850/90 border border-slate-750">
+                      <div className="flex items-center gap-2 text-slate-400 text-xs font-bold mb-1">
+                        <Navigation className="w-3.5 h-3.5 text-amber-400" />
+                        <span>आज की राइड्स</span>
+                      </div>
+                      <div className="text-2xl font-black text-white font-mono">
+                        {summary.todayRidesCount}
+                        <span className="text-xs font-normal text-slate-400 ml-1">ट्रिप</span>
+                      </div>
+                    </div>
+
+                    {/* Direct Cash in Hand */}
+                    <div className="p-3.5 rounded-2xl bg-slate-850/90 border border-slate-750">
+                      <div className="flex items-center gap-2 text-slate-400 text-xs font-bold mb-1">
+                        <Wallet className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>कैश कलेक्शन</span>
+                      </div>
+                      <div className="text-2xl font-black text-emerald-400 font-mono">
+                        ₹{summary.todayGrossFare}
+                      </div>
+                    </div>
+
+                    {/* Wallet Balance with Recharge Button */}
+                    <div className="p-3.5 rounded-2xl bg-slate-850/90 border border-slate-750">
+                      <div className="flex items-center justify-between text-slate-400 text-xs font-bold mb-1">
+                        <span>वॉलेट बैलेंस</span>
+                        <button
+                          type="button"
+                          onClick={() => setIsRazorpayOpen(true)}
+                          className="text-[10px] text-amber-400 underline font-bold cursor-pointer"
+                        >
+                          + रिचार्ज
+                        </button>
+                      </div>
+                      <div className="text-xl font-black text-white font-mono">
+                        ₹{driver.walletBalance.toFixed(2)}
+                      </div>
+                    </div>
+
+                    {/* Driver Rating */}
+                    <div className="p-3.5 rounded-2xl bg-slate-850/90 border border-slate-750">
+                      <div className="flex items-center gap-2 text-slate-400 text-xs font-bold mb-1">
+                        <Award className="w-3.5 h-3.5 text-yellow-400" />
+                        <span>राइडर रेटिंग</span>
+                      </div>
+                      <div className="text-xl font-black text-white font-mono flex items-center gap-1">
+                        <span>{driver.rating}</span>
+                        <span className="text-xs text-yellow-400">★★★★★</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Daily Target Incentive Bonus Card */}
+                  <div className="p-4 rounded-3xl bg-slate-850/90 border border-slate-750 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <Award className="w-4 h-4 text-amber-400" />
+                        <span>दैनिक इंसेंटिव (Daily Target Bonus)</span>
+                      </span>
+                      <span className="text-xs font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">
+                        ₹{summary.dailyIncentiveBonus} बोनस
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs text-slate-300 pt-1">
+                      <span>लक्ष्य: {summary.dailyIncentiveTarget} राइड्स पूरी करें</span>
+                      <span className="font-bold font-mono">
+                        {summary.dailyIncentiveCompleted} / {summary.dailyIncentiveTarget} पूरी
+                      </span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full h-2.5 rounded-full bg-slate-800 overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-amber-500 to-emerald-400 rounded-full transition-all duration-500"
+                        style={{
+                          width: `${(summary.dailyIncentiveCompleted / summary.dailyIncentiveTarget) * 100}%`,
+                        }}
+                      />
+                    </div>
+
+                    <p className="text-[11px] text-slate-400">
+                      {summary.dailyIncentiveTarget - summary.dailyIncentiveCompleted > 0
+                        ? `सिर्फ ${summary.dailyIncentiveTarget - summary.dailyIncentiveCompleted} और राइड पूरी करें और ₹${summary.dailyIncentiveBonus} अतिरिक्त बोनस पाएं!`
+                        : '🎉 बधाई हो! आज का दैनिक इंसेंटिव बोनस हासिल हो चुका है!'}
+                    </p>
+                  </div>
+
+                  {/* Today's Completed Rides History */}
+                  <div className="space-y-2.5 pt-1">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-black text-slate-300 uppercase tracking-wider">
+                        आज की पूरी की गई राइड्स ({summary.todayRidesList.length})
+                      </h4>
+                      <span className="text-[11px] text-slate-400">इतिहास</span>
+                    </div>
+
+                    {summary.todayRidesList.length === 0 ? (
+                      <div className="p-4 rounded-2xl bg-slate-850/60 border border-slate-800 text-center text-xs text-slate-400">
+                        आज अभी तक कोई राइड पूरी नहीं हुई है। ड्यूटी ऑन रखें और नई सवारी स्वीकार करें!
+                      </div>
+                    ) : (
+                      summary.todayRidesList.map((r) => (
+                        <div
+                          key={r.id}
+                          className="p-3.5 rounded-2xl bg-slate-850 border border-slate-750 flex items-center justify-between text-xs"
+                        >
+                          <div className="space-y-1 min-w-0 pr-2">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-white truncate">{r.customerName}</span>
+                              <span className="text-[10px] text-slate-400 font-mono">({r.distanceKm} KM)</span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 truncate">
+                              {r.pickup.name.slice(0, 22)} → {r.drop.name.slice(0, 22)}
+                            </p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className="text-sm font-black text-emerald-400 font-mono block">
+                              +₹{(r.driverNetEarning || r.fare * 0.88 - 3).toFixed(2)}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block">किराया ₹{r.fare}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        ) : (
+          /* SECTION: FULLSCREEN LEAFLET MAP VIEWPORT */
+          <div className="flex-1 w-full h-full relative">
+            <LeafletMap
+              center={liveBroadcastLocation ? [liveBroadcastLocation.lat, liveBroadcastLocation.lng] : driverCoords}
+              userCoords={liveBroadcastLocation ? [liveBroadcastLocation.lat, liveBroadcastLocation.lng] : driverCoords}
+              userRole="driver"
+              pickupPoint={activeRide ? activeRide.pickup : null}
+              dropPoint={activeRide ? activeRide.drop : null}
+              driverMarkerCoords={liveBroadcastLocation ? [liveBroadcastLocation.lat, liveBroadcastLocation.lng] : null}
+              driverHeading={liveBroadcastLocation ? liveBroadcastLocation.heading : 0}
+              routePoints={getDriverRoutePoints()}
+            />
+
+            {/* Real-time GPS Broadcasting Indicator */}
+            {activeRide && liveBroadcastLocation && (
+              <div className="absolute top-28 left-3 z-30 bg-slate-900/95 backdrop-blur-md px-3 py-1.5 rounded-full border border-emerald-500/50 shadow-lg text-[11px] font-semibold text-emerald-400 flex items-center gap-2 pointer-events-none">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+                <span>
+                  GPS ब्रॉडकास्ट सक्रिय (3.5s • {liveBroadcastLocation.speedKmph} km/h • ~{liveBroadcastLocation.distanceRemainingKm} KM)
+                </span>
+              </div>
+            )}
+
+            {/* Status Overlay when Duty is OFF */}
+            {!driver.isDutyOn && !activeRide && (
+              <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-[2px] z-20 flex items-center justify-center p-4">
+                <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-750 text-center max-w-xs shadow-2xl">
+                  <div className="w-12 h-12 rounded-full bg-slate-800 text-slate-400 mx-auto mb-3 flex items-center justify-center">
+                    <Power className="w-6 h-6" />
+                  </div>
+                  <h4 className="text-base font-extrabold text-white">आप अभी ऑफ़लाइन हैं (Duty OFF)</h4>
+                  <p className="text-xs text-slate-400 mt-1 mb-4">
+                    सवारी अनुरोध प्राप्त करने के लिए ऊपर दिए गए स्विच से "DUTY ON" करें।
+                  </p>
+                  <button
+                    onClick={handleToggleDuty}
+                    disabled={driver.walletBalance < 0}
+                    className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/20 cursor-pointer"
+                  >
+                    {driver.walletBalance < 0 ? 'पहले वॉलेट रिचार्ज करें' : 'Start Duty (ड्यूटी ऑन करें)'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -6,7 +6,8 @@ const STORAGE_KEYS = {
   ACTIVE_RIDE: 'bharatraide_active_ride',
   TRANSACTIONS: 'bharatraide_transactions',
   STATS: 'bharatraide_stats',
-  SAVED_LOCATIONS: 'bharatraide_saved_locations'
+  SAVED_LOCATIONS: 'bharatraide_saved_locations',
+  COMPLETED_RIDES: 'bharatraide_completed_rides'
 };
 
 /**
@@ -136,6 +137,65 @@ class AppStore {
           totalFixedPlatformFees: 72.00
         };
         localStorage.setItem(STORAGE_KEYS.STATS, JSON.stringify(initialStats));
+      }
+      if (!localStorage.getItem(STORAGE_KEYS.COMPLETED_RIDES)) {
+        const sampleCompleted: RideRequest[] = [
+          {
+            id: 'ride_seed_1',
+            customerId: 'cust_seed_1',
+            customerName: 'अमित कुमार (Amit)',
+            customerPhone: '9811223344',
+            pickup: { name: 'कनॉट प्लेस (Connaught Place)', lat: 28.6328, lng: 77.2197 },
+            drop: { name: 'करोल बाग (Karol Bagh)', lat: 28.6517, lng: 77.1906 },
+            distanceKm: 3.8,
+            fare: 65,
+            platformCommission: 10.80,
+            driverNetEarning: 54.20,
+            status: 'completed',
+            driverId: 'drv_101',
+            driverName: 'Ramesh Kumar',
+            startOtp: '4821',
+            createdAt: Date.now() - 3600000 * 2,
+            completedAt: Date.now() - 3600000 * 1.5,
+          },
+          {
+            id: 'ride_seed_2',
+            customerId: 'cust_seed_2',
+            customerName: 'प्रिया शर्मा (Priya)',
+            customerPhone: '9877665544',
+            pickup: { name: 'राजीव चौक (Rajiv Chowk)', lat: 28.6329, lng: 77.2195 },
+            drop: { name: 'इंडिया गेट (India Gate)', lat: 28.6129, lng: 77.2295 },
+            distanceKm: 2.6,
+            fare: 48,
+            platformCommission: 8.76,
+            driverNetEarning: 39.24,
+            status: 'completed',
+            driverId: 'drv_101',
+            driverName: 'Ramesh Kumar',
+            startOtp: '1942',
+            createdAt: Date.now() - 3600000 * 3.5,
+            completedAt: Date.now() - 3600000 * 3.1,
+          },
+          {
+            id: 'ride_seed_3',
+            customerId: 'cust_seed_3',
+            customerName: 'दीपक वर्मा (Deepak)',
+            customerPhone: '9844332211',
+            pickup: { name: 'मंडी हाउस (Mandi House)', lat: 28.6258, lng: 77.2343 },
+            drop: { name: 'चांदनी चौक (Chandni Chowk)', lat: 28.6562, lng: 77.2300 },
+            distanceKm: 4.5,
+            fare: 75,
+            platformCommission: 12.00,
+            driverNetEarning: 63.00,
+            status: 'completed',
+            driverId: 'drv_101',
+            driverName: 'Ramesh Kumar',
+            startOtp: '7721',
+            createdAt: Date.now() - 3600000 * 5,
+            completedAt: Date.now() - 3600000 * 4.6,
+          }
+        ];
+        localStorage.setItem(STORAGE_KEYS.COMPLETED_RIDES, JSON.stringify(sampleCompleted));
       }
     }
   }
@@ -436,8 +496,11 @@ class AppStore {
 
     // Deduct silently from driver wallet
     if (ride.driverId) {
-      this.deductDriverCommission(ride.driverId, commission, ride.id);
+      this.deductDriverCommission(ride.driverId, commission, ride.id, netDriverEarnings);
     }
+
+    // Save to Completed Rides History
+    this.recordCompletedRide(ride);
 
     // Update Platform Stats
     this.recordCompletedRideStats(commission);
@@ -498,13 +561,19 @@ class AppStore {
     return d;
   }
 
-  private deductDriverCommission(driverId: string, commissionAmount: number, rideId: string) {
+  private deductDriverCommission(
+    driverId: string,
+    commissionAmount: number,
+    rideId: string,
+    netDriverEarnings: number = 0
+  ) {
     const drivers = this.getDrivers();
     const d = drivers.find((x) => x.id === driverId);
     if (!d) return;
 
     d.walletBalance = parseFloat((d.walletBalance - commissionAmount).toFixed(2));
     d.totalTrips = (d.totalTrips || 0) + 1;
+    d.totalEarnings = parseFloat(((d.totalEarnings || 0) + netDriverEarnings).toFixed(2));
 
     // Check negative wallet balance
     if (d.walletBalance < 0) {
@@ -520,6 +589,7 @@ class AppStore {
         ...user,
         walletBalance: d.walletBalance,
         totalTrips: d.totalTrips,
+        totalEarnings: d.totalEarnings,
         isRestricted: d.isRestricted,
         isDutyOn: d.isDutyOn
       };
@@ -550,6 +620,52 @@ class AppStore {
     const list = this.getTransactions();
     list.unshift(tx);
     localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(list));
+  }
+
+  // --- Completed Rides & Driver Earning Dashboard Data ---
+  public getCompletedRides(): RideRequest[] {
+    if (typeof window === 'undefined') return [];
+    const raw = localStorage.getItem(STORAGE_KEYS.COMPLETED_RIDES);
+    return raw ? JSON.parse(raw) : [];
+  }
+
+  public recordCompletedRide(ride: RideRequest) {
+    const list = this.getCompletedRides();
+    list.unshift(ride);
+    if (list.length > 50) list.pop();
+    localStorage.setItem(STORAGE_KEYS.COMPLETED_RIDES, JSON.stringify(list));
+  }
+
+  public getDriverCompletedRides(driverId: string): RideRequest[] {
+    return this.getCompletedRides().filter((r) => r.driverId === driverId);
+  }
+
+  public getDriverEarningsSummary(driverId: string) {
+    const rides = this.getDriverCompletedRides(driverId);
+    const drivers = this.getDrivers();
+    const driver = drivers.find((d) => d.id === driverId);
+
+    // Calculate today's figures (rides from today)
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+    const todayRides = rides.filter((r) => (r.completedAt || r.createdAt) >= startOfToday);
+    const todayGrossFare = todayRides.reduce((sum, r) => sum + (r.fare || 0), 0);
+    const todayNetEarnings = todayRides.reduce((sum, r) => sum + (r.driverNetEarning || (r.fare * 0.88 - 3)), 0);
+    const totalEarningsAllTime = driver?.totalEarnings || (todayNetEarnings + 4500);
+
+    return {
+      todayRidesCount: todayRides.length,
+      todayGrossFare: Math.round(todayGrossFare),
+      todayNetEarnings: parseFloat(todayNetEarnings.toFixed(2)),
+      totalEarningsAllTime: parseFloat(totalEarningsAllTime.toFixed(2)),
+      walletBalance: driver?.walletBalance || 0,
+      todayRidesList: todayRides,
+      // Daily incentive target: 8 rides = ₹150 bonus
+      dailyIncentiveTarget: 8,
+      dailyIncentiveBonus: 150,
+      dailyIncentiveCompleted: Math.min(todayRides.length, 8),
+    };
   }
 
   // --- Platform Stats for Admin Secret ---
